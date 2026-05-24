@@ -1,0 +1,167 @@
+{
+  "packs": [
+    {
+      "id": "flux_core",
+      "label_zh": "FLUX 文生图 / 图生图",
+      "label_en": "FLUX image",
+      "workflow_hint": "Flux_Sample_T2I.json, FLUX_人像写实化_I2I.json",
+      "files": [
+        {
+          "id": "flux_dev_fp8",
+          "name": "flux1-dev-fp8.safetensors",
+          "dir": "diffusion_models",
+          "min_mb": 10000,
+          "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors"
+        },
+        {
+          "id": "clip_l",
+          "name": "clip_l.safetensors",
+          "dir": "clip",
+          "min_mb": 200,
+          "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors"
+        },
+        {
+          "id": "t5xxl_fp8",
+          "name": "t5xxl_fp8_e4m3fn.safetensors",
+          "dir": "clip",
+          "min_mb": 4000,
+          "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors"
+        },
+        {
+          "id": "ae",
+          "name": "ae.safetensors",
+          "dir": "vae",
+          "min_mb": 300,
+          "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/ae.safetensors"
+        }
+      ]
+    },
+    {
+      "id": "sdxl_portrait",
+      "label_zh": "SDXL 国人肖像",
+      "label_en": "SDXL portrait",
+      "workflow_hint": "SDXL_AWPortraitXL_国人肖像.json",
+      "files": [
+        {
+          "id": "awportrait",
+          "name": "AWPortrait_XL_ver1.1.safetensors",
+          "dir": "checkpoints",
+          "min_mb": 6000,
+          "url": "https://huggingface.co/awplanet/AWPortraitXL/resolve/main/AWPortrait_XL_ver1.1.safetensors"
+        }
+      ]
+    },
+    {
+      "id": "hunyuan_dit",
+      "label_zh": "Hunyuan DiT 中文",
+      "label_en": "Hunyuan DiT",
+      "workflow_hint": "HunyuanDiT_T2I_中国风格.json",
+      "files": [
+        {
+          "id": "hunyuan12",
+          "name": "hunyuan_dit_1.2.safetensors",
+          "dir": "checkpoints/hunyuan_dit_comfyui",
+          "min_mb": 7000,
+          "url": "https://huggingface.co/comfyanonymous/hunyuan_dit_comfyui/resolve/main/hunyuan_dit_1.2.safetensors"
+        }
+      ]
+    },
+    {
+      "id": "kolors",
+      "label_zh": "Kolors 中文 T2I",
+      "label_en": "Kolors",
+      "workflow_hint": "Kolors_T2I_惊悚_场景.json",
+      "files": [
+        {
+          "id": "chatglm3",
+          "name": "chatglm3-4bit.safetensors",
+          "dir": "LLM/checkpoints",
+          "min_mb": 1500,
+          "url": "https://huggingface.co/Kijai/ChatGLM3-safetensors/resolve/main/chatglm3-4bit.safetensors"
+        }
+      ],
+      "note_zh": "还需在 ComfyUI-Manager 安装节点 ComfyUI-KwaiKolorsWrapper"
+    },
+    {
+      "id": "wan_i2v",
+      "label_zh": "Wan 2.2 图生视频 (8GB)",
+      "label_en": "Wan 2.2 I2V",
+      "workflow_hint": "I2V_标准_图生视频_稳态少虚影.json",
+      "files": [
+        {
+          "id": "wan_high",
+          "name": "wan2.2_i2v_high_noise_14B_Q3_K_S.gguf",
+          "dir": "unet",
+          "min_mb": 5000,
+          "url": "https://huggingface.co/bullerwins/Wan2.2-I2V-A14B-GGUF/resolve/main/wan2.2_i2v_high_noise_14B_Q3_K_S.gguf"
+        },
+        {
+          "id": "wan_low",
+          "name": "wan2.2_i2v_low_noise_14B_Q3_K_S.gguf",
+          "dir": "unet",
+          "min_mb": 5000,
+          "url": "https://huggingface.co/bullerwins/Wan2.2-I2V-A14B-GGUF/resolve/main/wan2.2_i2v_low_noise_14B_Q3_K_S.gguf"
+        },
+        {
+          "id": "umt5",
+          "name": "umt5-xxl-encoder-Q4_K_S.gguf",
+          "dir": "text_encoders",
+          "min_mb": 2000,
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q4_K_S.gguf"
+        },
+        {
+          "id": "wan_vae",
+          "name": "wan_2.1_vae.safetensors",
+          "dir": "vae",
+          "min_mb": 200,
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
+        },
+        {
+          "id": "wan_lora_h",
+          "name": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+          "dir": "loras",
+          "min_mb": 50,
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors"
+        },
+        {
+          "id": "wan_lora_l",
+          "name": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+          "dir": "loras",
+          "min_mb": 50,
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
+        }
+      ],
+      "note_zh": "需安装自定义节点 ComfyUI-GGUF（助手可尝试自动克隆）"
+    },
+    {
+      "id": "ltx_cloud",
+      "label_zh": "LTX 2.3 云 GPU (fp8)",
+      "label_en": "LTX 2.3 cloud fp8",
+      "workflow_hint": "ltx云GPU/*.json",
+      "files": [
+        {
+          "id": "ltx_fp8",
+          "name": "ltx-2.3-22b-dev-fp8.safetensors",
+          "dir": "checkpoints",
+          "min_mb": 20000,
+          "url": "https://huggingface.co/Lightricks/LTX-2.3-fp8/resolve/main/ltx-2.3-22b-dev-fp8.safetensors"
+        },
+        {
+          "id": "gemma_fp4",
+          "name": "gemma_3_12B_it_fp4_mixed.safetensors",
+          "dir": "text_encoders",
+          "min_mb": 8000,
+          "url": "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors"
+        },
+        {
+          "id": "ltx_distill_lora",
+          "name": "ltx-2.3-22b-distilled-lora-1.1_fro90_ceil72_condsafe.safetensors",
+          "dir": "loras",
+          "min_mb": 100,
+          "url": ""
+        }
+      ],
+      "note_zh": "distill LoRA 可从仓库 distill_loras 复制；需 24GB+ 显存"
+    }
+  ]
+}

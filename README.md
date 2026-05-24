@@ -46,7 +46,19 @@ cd c:\tiger\videoModel\jinFrameComfyUI
 
 仅工作流：`.\install\sync_to_comfyui.ps1 -WorkflowsOnly`
 
-## 安装与补丁
+## JinFrame 助手（推荐给「不想跑脚本」的用户）
+
+安装后 ComfyUI **右侧**会出现蓝色 **💬** 按钮：
+
+```powershell
+.\install\install_jinframe_assistant.ps1
+# 完全退出并重启 ComfyUI
+```
+
+- **顶部**：按模型分组的勾选框 + 文件列表；缺模型时显示 **一键下载**（无需手动跑 PowerShell）
+- **对话**：默认连接本机 **Ollama + Qwen**（先执行 `ollama pull qwen2.5:7b`）
+
+## 安装与补丁（进阶）
 
 - 环境：`install\setup_comfyui.ps1`
 - LTX 云模型下载：`install\install_ltx23_dev_fp8_download.ps1`
@@ -100,8 +112,16 @@ cd c:\tiger\videoModel\jinFrameComfyUI
 .\install\sync_to_comfyui.ps1
 ```
 
+## JinFrame Assistant (non-technical users)
+
+After `.\install\install_jinframe_assistant.ps1` and a ComfyUI restart, use the **💬** button on the **right** edge:
+
+- Model packs with checkboxes + **one-click download**
+- Chat via local **Qwen** (Ollama: `ollama pull qwen2.5:7b`)
+
 ## Tools
 
+- `install\install_jinframe_assistant.ps1` — UI assistant extension
 - `install\sanitize_workflow_prompts.py` — strip unsafe / explicit positive prompts
 - `install\prune_workflows.py` — move non-canonical JSON to `workflowbackup`
 

@@ -1,0 +1,1 @@
+# JinFrame Assistant subpackage
