@@ -20,8 +20,17 @@ def comfy_models_root() -> Path:
 
 
 def repo_root() -> Path:
+    if os.environ.get("JINFRAME_REPO_ROOT"):
+        return Path(os.environ["JINFRAME_REPO_ROOT"]).resolve()
     ext = Path(__file__).resolve().parent.parent
-    return Path(os.environ.get("JINFRAME_REPO_ROOT", ext.parent.parent)).resolve()
+    for candidate in (
+        Path(r"c:\tiger\videoModel\jinFrameComfyUI"),
+        ext.parent.parent,
+        ext,
+    ):
+        if (candidate / "workflows").is_dir():
+            return candidate.resolve()
+    return ext.resolve()
 
 
 def _load_manifest() -> dict:

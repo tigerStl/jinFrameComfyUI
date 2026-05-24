@@ -4,6 +4,9 @@ import "./jinframe_assistant.css";
 
 const PANEL_ID = "jinframe-assistant-panel";
 const BTN_ID = "jinframe-assistant-fab";
+const LS_AGENT = "jinframe_use_agent";
+const LS_KEY = "jinframe_cursor_api_key";
+const LS_SESSION = "jinframe_agent_session";
 
 function el(tag, cls, html) {
   const n = document.createElement(tag);
@@ -25,7 +28,7 @@ app.registerExtension({
 
     const fab = el("button", "jinframe-fab", "💬");
     fab.id = BTN_ID;
-    fab.title = "JinFrame 助手（模型下载 + Qwen 对话）";
+    fab.title = "JinFrame 助手";
     document.body.appendChild(fab);
 
     const panel = el("div", "jinframe-panel");
@@ -39,14 +42,31 @@ app.registerExtension({
     header.appendChild(closeBtn);
     panel.appendChild(header);
 
+    const agentBar = el("div", "jinframe-agent-bar", "");
+    agentBar.id = "jinframe-agent-bar";
+    agentBar.innerHTML = `
+      <label class="jinframe-agent-toggle">
+        <input type="checkbox" id="jinframe-agent-enable" />
+        <span>启用 <b>Cursor Agent</b> 修改工作流</span>
+      </label>
+      <div class="jinframe-key-row" id="jinframe-key-row">
+        <input type="password" id="jinframe-cursor-key" class="jinframe-key-input"
+          placeholder="Cursor API Key（cursor.com → Settings → Integrations）" autocomplete="off" />
+        <button type="button" class="jinframe-btn-secondary" id="jinframe-save-key">保存 Key</button>
+      </div>
+      <div class="jinframe-agent-hint" id="jinframe-agent-status"></div>
+    `;
+    panel.appendChild(agentBar);
+
     const qwenBar = el("div", "jinframe-qwen", "");
     qwenBar.id = "jinframe-qwen-bar";
     panel.appendChild(qwenBar);
 
     const modelSection = el("div", "jinframe-models", "");
     modelSection.id = "jinframe-model-section";
-    const modelTitle = el("div", "jinframe-section-title", "模型安装状态（勾选后点一键下载）");
-    modelSection.appendChild(modelTitle);
+    modelSection.appendChild(
+      el("div", "jinframe-section-title", "模型安装（勾选后点一键下载）")
+    );
     const modelList = el("div", "jinframe-pack-list", "");
     modelList.id = "jinframe-pack-list";
     modelSection.appendChild(modelList);
@@ -63,7 +83,7 @@ app.registerExtension({
     chatSection.appendChild(chatLog);
     const chatInput = el("textarea", "jinframe-chat-input", "");
     chatInput.id = "jinframe-chat-input";
-    chatInput.placeholder = "问我：缺什么模型？怎么出图？…";
+    chatInput.placeholder = "例：把 Wan I2V 默认分辨率改成 768×432";
     chatInput.rows = 2;
     chatSection.appendChild(chatInput);
     const sendBtn = el("button", "jinframe-btn-primary", "发送");
@@ -74,10 +94,50 @@ app.registerExtension({
 
     document.body.appendChild(panel);
 
+    const agentCb = document.getElementById("jinframe-agent-enable");
+    const keyInput = document.getElementById("jinframe-cursor-key");
+    const keyRow = document.getElementById("jinframe-key-row");
+    const agentStatusEl = document.getElementById("jinframe-agent-status");
+    const saveKeyBtn = document.getElementById("jinframe-save-key");
+
+    agentCb.checked = localStorage.getItem(LS_AGENT) === "1";
+    keyInput.value = localStorage.getItem(LS_KEY) || "";
+
     let chatHistory = [];
     let pollTimer = null;
+    let agentSessionId = localStorage.getItem(LS_SESSION) || crypto.randomUUID();
+
+    const useAgent = () => agentCb.checked;
+
+    const updateAgentUi = () => {
+      keyRow.style.display = useAgent() ? "flex" : "none";
+      qwenBar.style.display = useAgent() ? "none" : "block";
+      chatInput.placeholder = useAgent()
+        ? "描述要如何改 workflows/ 里的 json…"
+        : "问我：缺什么模型？怎么出图？…";
+    };
+
+    agentCb.addEventListener("change", () => {
+      localStorage.setItem(LS_AGENT, useAgent() ? "1" : "0");
+      updateAgentUi();
+    });
+
+    const renderAgent = (agent) => {
+      const parts = [];
+      if (!agent.sdk_installed) {
+        parts.push("⚠️ 需安装 cursor-sdk（见安装脚本 pip install）");
+      }
+      if (agent.has_key) {
+        parts.push(`🔑 已保存 Key: <code>${agent.key_masked}</code>`);
+      } else {
+        parts.push("🔑 未保存 API Key");
+      }
+      parts.push(`📁 仓库: <code>${agent.repo_root || ""}</code>`);
+      agentStatusEl.innerHTML = parts.join("<br>");
+    };
 
     const renderQwen = (qwen) => {
+      if (useAgent()) return;
       const ok = qwen.ok;
       qwenBar.className = "jinframe-qwen " + (ok ? "ok" : "bad");
       qwenBar.innerHTML = ok
@@ -100,7 +160,7 @@ app.registerExtension({
         row.appendChild(cb);
         const badge = p.all_installed
           ? '<span class="jinframe-badge ok">已安装</span>'
-          : `<span class="jinframe-badge miss">缺 ${p.missing_count} 个文件</span>`;
+          : `<span class="jinframe-badge miss">缺 ${p.missing_count} 个</span>`;
         const files = p.files
           .map((f) => `<li class="${f.installed ? "ok" : "miss"}">${f.name}</li>`)
           .join("");
@@ -109,18 +169,21 @@ app.registerExtension({
         row.appendChild(body);
         modelList.appendChild(row);
       }
-      modelSection.style.display = anyMissing ? "block" : "none";
       if (!anyMissing) {
-        modelList.innerHTML = '<p class="jinframe-all-ok">✅ 常用模型包已就绪。可直接加载工作流。</p>';
-        modelSection.style.display = "block";
+        modelList.innerHTML =
+          '<p class="jinframe-all-ok">✅ 常用模型包已就绪。</p>';
       }
     };
 
     const refresh = async () => {
       try {
         const st = await fetchStatus();
+        renderAgent(st.agent || {});
         renderQwen(st.qwen);
         renderPacks(st.packs);
+        if (st.agent?.has_key && !keyInput.value) {
+          keyInput.placeholder = `已保存 ${st.agent.key_masked}，可输入新 Key 覆盖`;
+        }
         const dl = st.download || {};
         const statusEl = document.getElementById("jinframe-dl-status");
         if (dl.active) {
@@ -134,16 +197,37 @@ app.registerExtension({
           statusEl.textContent = "";
         }
       } catch (e) {
-        qwenBar.className = "jinframe-qwen bad";
-        qwenBar.textContent = "无法连接助手 API，请确认已安装 ComfyUI_JinFrameAssistant 并重启 ComfyUI";
+        agentStatusEl.textContent = "无法连接助手 API，请重启 ComfyUI";
       }
     };
+
+    saveKeyBtn.addEventListener("click", async () => {
+      const key = keyInput.value.trim();
+      if (!key) {
+        alert("请粘贴 Cursor API Key");
+        return;
+      }
+      await api.fetchApi("/jinframe/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cursor_api_key: key,
+          agent_enabled: useAgent(),
+        }),
+      });
+      localStorage.setItem(LS_KEY, key);
+      await refresh();
+      appendMsg("assistant", "✅ API Key 已保存到本机 ComfyUI 配置。");
+    });
 
     const toggle = () => {
       const open = panel.style.display !== "none";
       panel.style.display = open ? "none" : "flex";
       fab.classList.toggle("open", !open);
-      if (!open) refresh();
+      if (!open) {
+        updateAgentUi();
+        refresh();
+      }
     };
 
     fab.addEventListener("click", toggle);
@@ -162,7 +246,8 @@ app.registerExtension({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pack_ids: ids }),
       });
-      document.getElementById("jinframe-dl-status").textContent = "已开始下载，请保持 ComfyUI 窗口打开…";
+      document.getElementById("jinframe-dl-status").textContent =
+        "已开始下载，请保持窗口打开…";
       if (!pollTimer) pollTimer = setInterval(refresh, 3000);
     });
 
@@ -175,23 +260,51 @@ app.registerExtension({
     const sendChat = async () => {
       const text = chatInput.value.trim();
       if (!text) return;
+      if (useAgent() && !keyInput.value.trim()) {
+        const st = await fetchStatus();
+        if (!st.agent?.has_key) {
+          alert("启用 Agent 前请先填写并保存 Cursor API Key");
+          keyInput.focus();
+          return;
+        }
+      }
       chatInput.value = "";
       appendMsg("user", text);
       sendBtn.disabled = true;
+      if (useAgent()) {
+        appendMsg(
+          "assistant",
+          "<em>Cursor Agent 运行中，可能需要 1–5 分钟，请稍候…</em>"
+        );
+      }
       try {
+        const payload = {
+          message: text,
+          messages: chatHistory,
+          use_agent: useAgent(),
+          cursor_api_key: keyInput.value.trim() || undefined,
+          session_id: agentSessionId,
+        };
         const r = await api.fetchApi("/jinframe/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, messages: chatHistory }),
+          body: JSON.stringify(payload),
         });
         const data = await r.json();
+        if (chatLog.lastChild?.classList?.contains("assistant")) {
+          const last = chatLog.lastChild;
+          if (last.textContent.includes("运行中")) last.remove();
+        }
         if (data.ok) {
           chatHistory.push({ role: "user", content: text });
           chatHistory.push({ role: "assistant", content: data.reply });
           if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
           appendMsg("assistant", data.reply);
+          if (data.backend === "cursor") {
+            localStorage.setItem(LS_SESSION, agentSessionId);
+          }
         } else {
-          appendMsg("assistant", data.reply || "LLM 不可用");
+          appendMsg("assistant", data.reply || "请求失败");
         }
       } catch (e) {
         appendMsg("assistant", "请求失败: " + e);
@@ -207,6 +320,7 @@ app.registerExtension({
       }
     });
 
+    updateAgentUi();
     await refresh();
     setInterval(refresh, 15000);
   },

@@ -55,8 +55,10 @@ cd c:\tiger\videoModel\jinFrameComfyUI
 # 完全退出并重启 ComfyUI
 ```
 
-- **顶部**：按模型分组的勾选框 + 文件列表；缺模型时显示 **一键下载**（无需手动跑 PowerShell）
-- **对话**：默认连接本机 **Ollama + Qwen**（先执行 `ollama pull qwen2.5:7b`）
+- **顶部**：勾选 **启用 Cursor Agent** → 粘贴 **Cursor API Key** → 保存（Key 存在本机 `ComfyUI\user\default\jinframe_assistant_config.json`）
+- **Agent 开启**：对话由 **Cursor SDK** 在本地修改 `workflows/`（需已克隆 jinFrameComfyUI，并设置 `JINFRAME_REPO_ROOT`）
+- **Agent 关闭**：对话走本机 **Ollama + Qwen**（`ollama pull qwen2.5:7b`）
+- **模型区**：按模型分组勾选 + **一键下载**（无需手动 PowerShell）
 
 ## 安装与补丁（进阶）
 
@@ -116,8 +118,9 @@ cd c:\tiger\videoModel\jinFrameComfyUI
 
 After `.\install\install_jinframe_assistant.ps1` and a ComfyUI restart, use the **💬** button on the **right** edge:
 
+- **Cursor Agent** toggle + API Key field (edits `workflows/` via Cursor SDK)
 - Model packs with checkboxes + **one-click download**
-- Chat via local **Qwen** (Ollama: `ollama pull qwen2.5:7b`)
+- Chat via **Qwen** when Agent is off (Ollama: `ollama pull qwen2.5:7b`)
 
 ## Tools
 

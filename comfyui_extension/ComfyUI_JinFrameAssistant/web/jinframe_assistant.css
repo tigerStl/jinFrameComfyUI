@@ -50,6 +50,61 @@ button.jinframe-fab {
   flex-shrink: 0;
 }
 
+.jinframe-agent-bar {
+  padding: 10px 14px;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+  background: #1e2430;
+}
+
+.jinframe-agent-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.jinframe-agent-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.jinframe-key-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.jinframe-key-input {
+  flex: 1;
+  min-width: 0;
+  background: #0f1115;
+  border: 1px solid #475569;
+  color: #f1f5f9;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.jinframe-agent-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.jinframe-btn-secondary {
+  background: #334155;
+  color: #e2e8f0;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .jinframe-title {
   font-size: 15px;
 }
