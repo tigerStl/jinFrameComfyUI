@@ -1,0 +1,356 @@
+{
+  "id": "f8a2c1d0-s2v-simple-wan-sound-i2v",
+  "revision": 0,
+  "last_node_id": 22,
+  "last_link_id": 22,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [-900, 80],
+      "size": [320, 82],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {"name": "unet_name", "type": "COMBO", "widget": {"name": "unet_name"}, "link": null},
+        {"name": "weight_dtype", "type": "COMBO", "widget": {"name": "weight_dtype"}, "link": null}
+      ],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1]}],
+      "properties": {"Node name for S&R": "UNETLoader"},
+      "title": "S2V 扩散模型",
+      "widgets_values": ["wan2.2_s2v_14B_fp8_scaled.safetensors", "default"]
+    },
+    {
+      "id": 20,
+      "type": "LoraLoaderModelOnly",
+      "pos": [-900, 200],
+      "size": [320, 82],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 1},
+        {"name": "lora_name", "type": "COMBO", "widget": {"name": "lora_name"}, "link": null},
+        {"name": "strength_model", "type": "FLOAT", "widget": {"name": "strength_model"}, "link": null}
+      ],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [2]}],
+      "properties": {"Node name for S&R": "LoraLoaderModelOnly"},
+      "title": "Lightning 4-step（可关：lora=none）",
+      "widgets_values": ["wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors", 1.0]
+    },
+    {
+      "id": 21,
+      "type": "ModelSamplingSD3",
+      "pos": [-900, 310],
+      "size": [270, 58],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 2},
+        {"name": "shift", "type": "FLOAT", "widget": {"name": "shift"}, "link": null}
+      ],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [3]}],
+      "properties": {"Node name for S&R": "ModelSamplingSD3"},
+      "widgets_values": [8.0]
+    },
+    {
+      "id": 2,
+      "type": "CLIPLoader",
+      "pos": [-900, 420],
+      "size": [320, 106],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {"name": "clip_name", "type": "COMBO", "widget": {"name": "clip_name"}, "link": null},
+        {"name": "type", "type": "COMBO", "widget": {"name": "type"}, "link": null},
+        {"name": "device", "type": "COMBO", "widget": {"name": "device"}, "link": null}
+      ],
+      "outputs": [{"name": "CLIP", "type": "CLIP", "links": [4, 5]}],
+      "properties": {"Node name for S&R": "CLIPLoader"},
+      "widgets_values": ["umt5_xxl_fp8_e4m3fn_scaled.safetensors", "wan", "default"]
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [-900, 560],
+      "size": [270, 82],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [{"name": "vae_name", "type": "COMBO", "widget": {"name": "vae_name"}, "link": null}],
+      "outputs": [{"name": "VAE", "type": "VAE", "links": [6, 7]}],
+      "properties": {"Node name for S&R": "VAELoader"},
+      "widgets_values": ["wan_2.1_vae.safetensors"]
+    },
+    {
+      "id": 4,
+      "type": "AudioEncoderLoader",
+      "pos": [-900, 680],
+      "size": [320, 70],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {"name": "audio_encoder_name", "type": "COMBO", "widget": {"name": "audio_encoder_name"}, "link": null}
+      ],
+      "outputs": [{"name": "AUDIO_ENCODER", "type": "AUDIO_ENCODER", "links": [8]}],
+      "properties": {"Node name for S&R": "AudioEncoderLoader"},
+      "title": "音频编码器 wav2vec2",
+      "widgets_values": ["wav2vec2_large_english_fp16.safetensors"]
+    },
+    {
+      "id": 5,
+      "type": "LoadAudio",
+      "pos": [-900, 800],
+      "size": [320, 120],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {"name": "audio", "type": "COMBO", "widget": {"name": "audio"}, "link": null},
+        {"name": "audioUI", "type": "AUDIO_UI", "widget": {"name": "audioUI"}, "link": null}
+      ],
+      "outputs": [{"name": "AUDIO", "type": "AUDIO", "links": [9, 10]}],
+      "properties": {"Node name for S&R": "LoadAudio"},
+      "title": "① 上传驱动音频（人声/对白）",
+      "widgets_values": ["input_audio.mp3", null, null]
+    },
+    {
+      "id": 15,
+      "type": "AudioEncoderEncode",
+      "pos": [-520, 800],
+      "size": [240, 46],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {"name": "audio_encoder", "type": "AUDIO_ENCODER", "link": 8},
+        {"name": "audio", "type": "AUDIO", "link": 9}
+      ],
+      "outputs": [{"name": "AUDIO_ENCODER_OUTPUT", "type": "AUDIO_ENCODER_OUTPUT", "links": [11]}],
+      "properties": {"Node name for S&R": "AudioEncoderEncode"},
+      "widgets_values": []
+    },
+    {
+      "id": 6,
+      "type": "LoadImage",
+      "pos": [-900, 980],
+      "size": [320, 314],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "COMBO", "widget": {"name": "image"}, "link": null},
+        {"name": "upload", "type": "IMAGEUPLOAD", "widget": {"name": "upload"}, "link": null}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [12]},
+        {"name": "MASK", "type": "MASK", "links": null}
+      ],
+      "properties": {"Node name for S&R": "LoadImage"},
+      "title": "② 上传参考人像（半身/胸像）",
+      "widgets_values": ["reference.png", "image"]
+    },
+    {
+      "id": 7,
+      "type": "CLIPTextEncode",
+      "pos": [-520, 80],
+      "size": [440, 200],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 4},
+        {"name": "text", "type": "STRING", "widget": {"name": "text"}, "link": null}
+      ],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [13]}],
+      "properties": {"Node name for S&R": "CLIPTextEncode"},
+      "title": "正向 · 与音频同步的表演",
+      "widgets_values": [
+        "A young woman speaking to camera, natural lip sync and subtle head movement, same person as reference image, cinematic lighting, realistic skin, calm emotional expression matching the audio, indoor scene, high quality video."
+      ]
+    },
+    {
+      "id": 8,
+      "type": "CLIPTextEncode",
+      "pos": [-520, 300],
+      "size": [420, 120],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 5},
+        {"name": "text", "type": "STRING", "widget": {"name": "text"}, "link": null}
+      ],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [14]}],
+      "properties": {"Node name for S&R": "CLIPTextEncode"},
+      "title": "负向",
+      "widgets_values": [
+        "static, blurry, distorted face, wrong lip sync, different person, cartoon, low quality, oversaturated, text watermark"
+      ]
+    },
+    {
+      "id": 10,
+      "type": "WanSoundImageToVideo",
+      "pos": [-80, 200],
+      "size": [300, 280],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {"name": "positive", "type": "CONDITIONING", "link": 13},
+        {"name": "negative", "type": "CONDITIONING", "link": 14},
+        {"name": "vae", "type": "VAE", "link": 6},
+        {"name": "width", "type": "INT", "widget": {"name": "width"}, "link": null},
+        {"name": "height", "type": "INT", "widget": {"name": "height"}, "link": null},
+        {"name": "length", "type": "INT", "widget": {"name": "length"}, "link": null},
+        {"name": "batch_size", "type": "INT", "widget": {"name": "batch_size"}, "link": null},
+        {"name": "audio_encoder_output", "type": "AUDIO_ENCODER_OUTPUT", "link": 11},
+        {"name": "ref_image", "type": "IMAGE", "link": 12},
+        {"name": "control_video", "type": "IMAGE", "link": null},
+        {"name": "ref_motion", "type": "IMAGE", "link": null}
+      ],
+      "outputs": [
+        {"name": "positive", "type": "CONDITIONING", "links": [15]},
+        {"name": "negative", "type": "CONDITIONING", "links": [16]},
+        {"name": "latent", "type": "LATENT", "links": [17]}
+      ],
+      "properties": {"Node name for S&R": "WanSoundImageToVideo"},
+      "title": "WanSoundImageToVideo",
+      "widgets_values": [832, 480, 77, 1]
+    },
+    {
+      "id": 11,
+      "type": "KSampler",
+      "pos": [280, 200],
+      "size": [315, 474],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 3},
+        {"name": "positive", "type": "CONDITIONING", "link": 15},
+        {"name": "negative", "type": "CONDITIONING", "link": 16},
+        {"name": "latent_image", "type": "LATENT", "link": 17},
+        {"name": "seed", "type": "INT", "widget": {"name": "seed"}, "link": null},
+        {"name": "steps", "type": "INT", "widget": {"name": "steps"}, "link": null},
+        {"name": "cfg", "type": "FLOAT", "widget": {"name": "cfg"}, "link": null},
+        {"name": "sampler_name", "type": "COMBO", "widget": {"name": "sampler_name"}, "link": null},
+        {"name": "scheduler", "type": "COMBO", "widget": {"name": "scheduler"}, "link": null},
+        {"name": "denoise", "type": "FLOAT", "widget": {"name": "denoise"}, "link": null}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [18]}],
+      "properties": {"Node name for S&R": "KSampler"},
+      "title": "Lightning: steps=4 cfg=1 | 无LoRA: steps=20 cfg=6",
+      "widgets_values": [0, "randomize", 4, 1.0, "uni_pc", "simple", 1.0]
+    },
+    {
+      "id": 12,
+      "type": "VAEDecode",
+      "pos": [640, 200],
+      "size": [210, 46],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 18},
+        {"name": "vae", "type": "VAE", "link": 7}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [19]}],
+      "properties": {"Node name for S&R": "VAEDecode"},
+      "widgets_values": []
+    },
+    {
+      "id": 13,
+      "type": "CreateVideo",
+      "pos": [640, 300],
+      "size": [270, 78],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 19},
+        {"name": "audio", "type": "AUDIO", "link": 10},
+        {"name": "fps", "type": "FLOAT", "widget": {"name": "fps"}, "link": null}
+      ],
+      "outputs": [{"name": "VIDEO", "type": "VIDEO", "links": [20]}],
+      "properties": {"Node name for S&R": "CreateVideo"},
+      "title": "fps=16（与 Wan S2V 一致）",
+      "widgets_values": [16.0]
+    },
+    {
+      "id": 14,
+      "type": "SaveVideo",
+      "pos": [960, 280],
+      "size": [270, 106],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {"name": "video", "type": "VIDEO", "link": 20},
+        {"name": "filename_prefix", "type": "STRING", "widget": {"name": "filename_prefix"}, "link": null},
+        {"name": "format", "type": "COMBO", "widget": {"name": "format"}, "link": null},
+        {"name": "codec", "type": "COMBO", "widget": {"name": "codec"}, "link": null}
+      ],
+      "outputs": [],
+      "properties": {"Node name for S&R": "SaveVideo"},
+      "widgets_values": ["video/wan_s2v_simple", "auto", "auto"]
+    },
+    {
+      "id": 22,
+      "type": "MarkdownNote",
+      "pos": [-900, -200],
+      "size": [520, 380],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Wan S2V 简版说明",
+      "properties": {},
+      "widgets_values": [
+        "## WanSoundImageToVideo（有声图生视频）\n\n**与 I2V GGUF 不同**：需 **wan2.2_s2v_14B** + **wav2vec2** + **umt5 safetensors**（非 GGUF）。\n\n**本简版**：单次约 **77 帧** ≈ 4.8 秒 @16fps。更长音频请用 `Wan22_S2V_有声图生视频_官方完整.json`（含 Extend 子图）。\n\n**安装**：`install\\install_wan22_s2v.ps1`\n\n**显存**：建议 **16GB+**；8GB 笔记本易 OOM。\n\n**length**：帧数，建议 77 的倍数思路见官方文档。\n\n**音频**：英文 wav2vec 对英文对白最稳；中文可先试，口型可能一般。"
+      ],
+      "color": "#432",
+      "bgcolor": "#111"
+    }
+  ],
+  "links": [
+    [1, 1, 0, 20, 0, "MODEL"],
+    [2, 20, 0, 21, 0, "MODEL"],
+    [3, 21, 0, 11, 0, "MODEL"],
+    [4, 2, 0, 7, 0, "CLIP"],
+    [5, 2, 0, 8, 0, "CLIP"],
+    [6, 3, 0, 10, 2, "VAE"],
+    [7, 3, 0, 12, 1, "VAE"],
+    [8, 4, 0, 15, 0, "AUDIO_ENCODER"],
+    [9, 5, 0, 15, 1, "AUDIO"],
+    [10, 5, 0, 13, 1, "AUDIO"],
+    [11, 15, 0, 10, 7, "AUDIO_ENCODER_OUTPUT"],
+    [12, 6, 0, 10, 8, "IMAGE"],
+    [13, 7, 0, 10, 0, "CONDITIONING"],
+    [14, 8, 0, 10, 1, "CONDITIONING"],
+    [15, 10, 0, 11, 1, "CONDITIONING"],
+    [16, 10, 1, 11, 2, "CONDITIONING"],
+    [17, 10, 2, 11, 3, "LATENT"],
+    [18, 11, 0, 12, 0, "LATENT"],
+    [19, 12, 0, 13, 0, "IMAGE"],
+    [20, 13, 0, 14, 0, "VIDEO"]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Wan 2.2 S2V · WanSoundImageToVideo 简版",
+      "bounding": [-940, -240, 2200, 1580],
+      "color": "#a33535",
+      "font_size": 22,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {"ds": {"scale": 0.65, "offset": [1100, 400]}},
+  "version": 0.4
+}

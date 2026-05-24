@@ -1,0 +1,33 @@
+# Local ComfyUI runtime (do not version vendor install)
+comfyui/
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Large model artifacts (download via install scripts)
+*.safetensors
+*.gguf
+*.ckpt
+*.pt
+*.bin
+
+# ComfyUI outputs
+output/
+
+# Local scan / temp
+install/_hits.txt
+install/_scan_result.txt
+distill_loras/
+prompt_enhancer/
+sulphur_*.safetensors
+install/sulphur2-install-notes/

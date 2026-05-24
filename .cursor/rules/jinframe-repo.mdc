@@ -1,0 +1,14 @@
+---
+description: jinFrameComfyUI is the sole dev repo; sync workflows to ComfyUI
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# jinFrameComfyUI 工作区约定
+
+- **只修改** `c:\tiger\videoModel\jinFrameComfyUI`（工作流、`install/`、文档）。不要以 `Sulphur-2-base` 为主目录。
+- **运行环境**：`C:\ComfyUI\ComfyUI`（可用 `COMFYUI_ROOT` 覆盖）。
+- 改完工作流后运行：`.\install\sync_to_comfyui.ps1`
+- Python 脚本路径用 `install/repo_paths.py`（`REPO_ROOT`、`COMFY_ROOT`、`REPO_WF`、`COMFY_WF`），勿写死旧 `Sulphur-2-base` 路径。
+- 插件补丁（`patch_*.py`）写入 `ComfyUI\custom_nodes\`，改后需重启 ComfyUI。
