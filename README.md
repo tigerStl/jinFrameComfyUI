@@ -2,6 +2,8 @@
 
 **金帧 AI 视频平台**是一套面向 ComfyUI 的**图像 + 视频**生产方案：预置可直接运行的标准工作流、一键模型下载、工作流同步与安全清理工具，并内置 **金帧助手** 面板，让不熟悉命令行的用户也能在界面里完成「下模型 → 开工作流 → 对话改流程」。
 
+> **English:** [README.en.md](README.en.md) — full platform guide, quick start, and preset workflow reference.
+
 > 模型文件（`.safetensors` / `.gguf`）体积较大，需单独下载。平台已为各工作流锁定固定版本，安装与校验步骤见 **[模型安装说明（MODELS.md）](MODELS.md)**。
 
 ---
@@ -124,8 +126,7 @@ D:\JinFrameAI\
 allInOneInstall\AllInOneInstall.exe --install-root=E:\AI\JinFrame
 ```
 
-程序将自动检查并安装 Git、Python、可选 Node.js，再安装 ComfyUI 与金帧助手，最后询问是否启动。  
-安装程序**源码**在 `jinFrameComfyUIInstall`（不在本仓库）。
+程序将自动检查并安装 Git、Python、可选 Node.js，再安装 ComfyUI 与金帧助手，最后询问是否启动。
 
 ### 1. 获取本仓库
 
@@ -219,7 +220,7 @@ python main.py --lowvram
 
 | 路径 | 说明 |
 |------|------|
-| **本仓库根目录** | 工作流、`install/`、金帧助手源码、`COMFYUI.lock.json`、`MODELS.lock.json` |
+| **本仓库根目录** | 工作流、`install/`、金帧助手扩展、`COMFYUI.lock.json`、`MODELS.lock.json` |
 | **ComfyUI 安装目录** | 运行环境（`setup_comfyui.ps1` 克隆；默认 `comfyui\ComfyUI`，已在 `.gitignore`） |
 | **工作流备份目录（可选）** | 精简脚本移出的历史 JSON；需要时复制回 `workflows\` |
 
@@ -601,39 +602,6 @@ python main.py --lowvram
 
 ---
 
-# 金帧AI视频平台_ComfyUI (English)
+## English documentation
 
-**Golden Frame AI Video Platform** for ComfyUI: curated workflows for image and video (FLUX, SDXL, Hunyuan DiT, Kolors, Wan 2.2, LTX 2.3), one-click model downloads via the **JinFrame Assistant** panel, sync/sanitize/prune tooling, and optional **Cursor Agent** to edit workflows from chat.
-
-## Highlights
-
-- **Image**: T2I, I2I, portrait, scene fusion, Chinese stacks (Hunyuan, Kolors)  
-- **Video**: Wan I2V (8GB-friendly GGUF), Wan S2V, LTX I2V/T2V (local + cloud fp8)  
-- **Storyboard**: keyframes → short clips → ffmpeg concat (`wan视频流/`, `ltx视频流/`)  
-- **Assistant**: model packs, download status, Cursor Agent or local Qwen (Ollama)  
-- **Ops**: `sync_to_comfyui.ps1`, `sanitize_workflow_prompts.py`, `prune_workflows.py`  
-
-## Quick start
-
-```powershell
-git clone https://github.com/tigerStl/jinFrameComfyUI.git
-cd jinFrameComfyUI
-.\install\setup_comfyui.ps1
-$env:COMFYUI_ROOT = (Resolve-Path .\comfyui\ComfyUI).Path
-.\install\install_jinframe_assistant.ps1 -ComfyRoot $env:COMFYUI_ROOT
-.\install\sync_to_comfyui.ps1 -ComfyRoot $env:COMFYUI_ROOT
-cd $env:COMFYUI_ROOT
-python main.py --lowvram
-```
-
-ComfyUI **v0.21.1** is pinned in `COMFYUI.lock.json` (not stored inside Git). See **MODELS.md** for checkpoints.
-
-## Model installation
-
-Checkpoints are downloaded separately (not bundled in Git). Follow **[MODELS.md](MODELS.md)** for the full list, download commands, and verification steps.
-
-- **Easiest:** JinFrame Assistant in ComfyUI → check model packs → **one-click download**.  
-- **Script:** `python install\download_from_lock.py --pack <pack_id>` then `python install\verify_models.py`.  
-- Set `COMFYUI_ROOT` to your ComfyUI install path before running scripts (see MODELS.md).
-
-Per-workflow guides (inputs, parameters, pipelines) are in the Chinese section **[预设流程详细说明](#预设流程详细说明)**. See `workflows/工作流目录说明.md` for the folder layout.
+Full English README (platform overview, one-click install, ComfyUI setup, every preset workflow, scripts, VRAM notes): **[README.en.md](README.en.md)**

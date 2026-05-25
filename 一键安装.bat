@@ -8,7 +8,7 @@ if exist "%~dp0allInOneInstall\一键安装.exe" set "INSTALLER=%~dp0allInOneIns
 
 if not exist "%INSTALLER%" (
     echo [错误] 未找到 allInOneInstall\AllInOneInstall.exe
-    echo 请从发布包获取完整仓库，或联系维护者编译安装程序。
+    echo 请从发布包获取完整仓库（需包含 allInOneInstall 目录）。
     pause
     exit /b 1
 )
