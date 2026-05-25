@@ -1,13 +1,13 @@
 # Install pinned ComfyUI + custom nodes from COMFYUI.lock.json
 # Usage (from repo root):
 #   .\install\setup_comfyui.ps1
-#   .\install\setup_comfyui.ps1 -ComfyRoot "D:\ComfyUI\ComfyUI"
-#
-# Default install folder when -ComfyRoot omitted: .\comfyui\ComfyUI (under this repo, gitignored)
+#   .\install\setup_comfyui.ps1 -ComfyRoot "K:\ComfyUI\ComfyUI"
+#   .\install\setup_comfyui.ps1 -ComfyRoot "K:\ComfyUI\ComfyUI" -Force   # re-fetch git + pip
 
 param(
     [string]$ComfyRoot = "",
-    [switch]$SkipPip
+    [switch]$SkipPip,
+    [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,7 +30,25 @@ Write-Host "=== JinFrame ComfyUI setup (pinned) ===" -ForegroundColor Cyan
 Write-Host "Repo:  $RepoRoot"
 Write-Host "Comfy: $ComfyRoot"
 Write-Host "Lock:  ComfyUI $($Lock.comfyui.tag) @ $($Lock.comfyui.revision.Substring(0,12))..."
+if (-not $Force) {
+    Write-Host "Fast mode: skip git/pip when already at locked revision (use -Force to redo)." -ForegroundColor DarkGray
+}
 Write-Host ""
+
+function Get-GitHead {
+    param([string]$Path)
+    if (-not (Test-Path (Join-Path $Path ".git"))) { return $null }
+    $h = (git -C $Path rev-parse HEAD 2>$null | Out-String).Trim()
+    if ($h.Length -lt 12) { return $null }
+    return $h
+}
+
+function Test-AtRevision {
+    param([string]$Path, [string]$Revision)
+    $head = Get-GitHead -Path $Path
+    if (-not $head) { return $false }
+    return ($head -eq $Revision) -or $head.StartsWith($Revision.Substring(0, 12))
+}
 
 function Ensure-GitRepo {
     param(
@@ -44,17 +62,33 @@ function Ensure-GitRepo {
     if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
 
     if (Test-Path (Join-Path $Path ".git")) {
+        if ((-not $Force) -and (Test-AtRevision -Path $Path -Revision $Revision)) {
+            Write-Host "[git] skip $Label (already $($Revision.Substring(0,12)))" -ForegroundColor DarkGray
+            return
+        }
         Write-Host "[git] sync $Label -> $($Revision.Substring(0,12))..." -ForegroundColor Yellow
-        git -C $Path fetch origin 2>$null
+        # Shallow fetch of target commit only (faster than full fetch origin)
+        git -C $Path fetch --depth 1 origin $Revision 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            git -C $Path fetch origin 2>$null
+        }
         git -C $Path checkout -f $Revision
         return
     }
-    if (Test-Path $Path) { Remove-Item $Path -Recurse -Force }
+
+    if ((Test-Path $Path) -and ((Get-ChildItem $Path -Force | Measure-Object).Count -gt 0)) {
+        if ((-not $Force) -and (Test-Path (Join-Path $Path "main.py")) -and (Test-Path (Join-Path $Path "comfy\options.py"))) {
+            Write-Host "[git] skip clone $Label (existing ComfyUI tree, no .git)" -ForegroundColor DarkYellow
+            return
+        }
+        Remove-Item $Path -Recurse -Force
+    }
+
     Write-Host "[git] clone $Label" -ForegroundColor Green
     if ($Tag) {
         git clone --depth 1 --branch $Tag $Url $Path
     } else {
-        git clone $Url $Path
+        git clone --depth 1 $Url $Path
         git -C $Path checkout -f $Revision
     }
 }
@@ -92,6 +126,14 @@ function Resolve-PythonForComfy {
     return "python"
 }
 
+function Test-ComfyUIPythonDeps {
+    param([string]$Py, [string]$ComfyRoot)
+    $env:PYTHONPATH = $ComfyRoot
+    $code = "import sys; sys.path.insert(0, r'$($ComfyRoot -replace "'", "''")'); import comfy; import torch"
+    $p = Start-Process -FilePath $Py -ArgumentList @("-c", $code) -Wait -PassThru -NoNewWindow
+    return $p.ExitCode -eq 0
+}
+
 # --- verify clone ---
 $comfyPkg = Join-Path $ComfyRoot "comfy"
 if (-not (Test-Path (Join-Path $comfyPkg "options.py"))) {
@@ -112,12 +154,16 @@ if (-not $SkipPip) {
     $bootstrap = Join-Path $PSScriptRoot "bootstrap_python_pip.ps1"
     & $bootstrap -PythonExe $Py
 
-    $reqMain = Join-Path $ComfyRoot "requirements.txt"
-    if (Test-Path $reqMain) {
-        Write-Host "[pip] ComfyUI requirements.txt (may take several minutes)..." -ForegroundColor Green
-        & $Py -m pip install -r $reqMain
-        if ($LASTEXITCODE -ne 0) {
-            throw "pip install ComfyUI requirements failed. Try: `"$Py`" -m pip install -r `"$reqMain`""
+    if ((-not $Force) -and (Test-ComfyUIPythonDeps -Py $Py -ComfyRoot $ComfyRoot)) {
+        Write-Host "[pip] skip ComfyUI requirements.txt (comfy + torch already importable)" -ForegroundColor DarkGray
+    } else {
+        $reqMain = Join-Path $ComfyRoot "requirements.txt"
+        if (Test-Path $reqMain) {
+            Write-Host "[pip] ComfyUI requirements.txt (first install may take 10-30+ min)..." -ForegroundColor Green
+            & $Py -m pip install -r $reqMain --upgrade-strategy only-if-needed
+            if ($LASTEXITCODE -ne 0) {
+                throw "pip install ComfyUI requirements failed. Try: `"$Py`" -m pip install -r `"$reqMain`""
+            }
         }
     }
 
@@ -125,20 +171,19 @@ if (-not $SkipPip) {
         $req = $node.pip_requirements
         if (-not $req) { continue }
         $reqPath = Join-Path $CustomNodes (Join-Path $node.name $req)
-        if (Test-Path $reqPath) {
-            Write-Host "[pip] $($node.name)" -ForegroundColor Green
-            & $Py -m pip install -r $reqPath
+        if (-not (Test-Path $reqPath)) { continue }
+        if ($Force) {
+            Write-Host "[pip] $($node.name) (-Force)" -ForegroundColor Green
+            & $Py -m pip install -r $reqPath --upgrade-strategy only-if-needed
+            continue
         }
+        Write-Host "[pip] $($node.name) (only-if-needed)..." -ForegroundColor DarkGray
+        & $Py -m pip install -r $reqPath --upgrade-strategy only-if-needed -q
     }
 }
 
 $env:COMFYUI_ROOT = $ComfyRoot
 Write-Host ""
-Write-Host "Next steps:" -ForegroundColor Cyan
-Write-Host "  .\install\install_jinframe_assistant.ps1 -ComfyRoot `"$ComfyRoot`""
-Write-Host "  .\install\sync_to_comfyui.ps1 -ComfyRoot `"$ComfyRoot`""
-Write-Host "  See MODELS.md for model downloads"
-Write-Host ""
-Write-Host "Start ComfyUI (8GB GPU example):" -ForegroundColor Cyan
-Write-Host "  cd `"$ComfyRoot`""
-Write-Host "  python main.py $($Lock.launch.low_vram_args)"
+Write-Host "ComfyUI setup done." -ForegroundColor Green
+Write-Host "Next: install_jinframe_assistant.ps1, sync_to_comfyui.ps1, MODELS.md" -ForegroundColor Cyan
+Write-Host "Start: cd `"$ComfyRoot`" ; .\启动ComfyUI.bat" -ForegroundColor Cyan
