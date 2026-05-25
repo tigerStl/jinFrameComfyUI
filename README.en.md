@@ -100,20 +100,20 @@ At the **repo root**, double-click:
 
 Or run `allInOneInstall\一键安装.exe` (or `AllInOneInstall.exe`).
 
-**First run asks for install drive/folder** (non-C drive preferred, e.g. `D:\JinFrameAI`). ComfyUI and **models** go there to avoid filling C::
+**First run asks for a drive letter** (non-C preferred). ComfyUI and **models** install on that **drive root** — not under your Git clone folder:
 
 ```text
-D:\JinFrameAI\
+D:\
   ComfyUI\ComfyUI\          ← app + workflows
   ComfyUI\ComfyUI\models\   ← weights (largest)
-  tools\Python312\          ← if no suitable system Python
+  tools\Python312\
   tools\Git\
 ```
 
 Command line:
 
 ```powershell
-allInOneInstall\AllInOneInstall.exe --install-root=E:\AI\JinFrame
+allInOneInstall\AllInOneInstall.exe --install-root=D:
 ```
 
 The installer checks/installs Git, Python, optional Node.js, then ComfyUI, JinFrame Assistant, and workflow sync. You can launch ComfyUI at the end.

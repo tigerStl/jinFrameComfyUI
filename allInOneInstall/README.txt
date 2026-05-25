@@ -18,9 +18,9 @@ English: README.en.md (Quick start section 0)
 
 --------
 
-  --install-root=D:\JinFrameAI        安装根目录（推荐，避免 C 盘）
+  --install-root=D:                    安装盘（ComfyUI -> D:\ComfyUI\ComfyUI）
 
-  --comfy-root=D:\JinFrameAI\ComfyUI\ComfyUI   仅指定 ComfyUI 路径
+  --comfy-root=D:\ComfyUI\ComfyUI      仅指定 ComfyUI 路径
 
 
 
