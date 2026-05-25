@@ -42,4 +42,9 @@ English: README.en.md (Quick start section 0)
 
 - 大模型权重需另见 MODELS.md 或助手内下载
 
+启动 ComfyUI
+------------
+安装完成后双击 ComfyUI 目录下的 启动ComfyUI.bat（不在仓库根目录）。
+已设置用户环境变量 COMFYUI_ROOT；新开的终端也可识别。
+
 

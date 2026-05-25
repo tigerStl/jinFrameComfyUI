@@ -132,6 +132,8 @@ allInOneInstall\AllInOneInstall.exe --install-root=D:
 
 程序将自动检查并安装 Git、Python、可选 Node.js，再安装 ComfyUI 与金帧助手，最后询问是否启动。
 
+安装结束后，在 ComfyUI 目录生成 **`启动ComfyUI.bat`**（例如 `D:\ComfyUI\ComfyUI\启动ComfyUI.bat`），并写入用户环境变量 `COMFYUI_ROOT`、`JINFRAME_REPO_ROOT` 及工具盘 Python/Git 的 PATH。**日常请双击该 bat 启动**，不要依赖安装程序窗口内的 Python。
+
 ### 1. 获取本仓库
 
 ```powershell

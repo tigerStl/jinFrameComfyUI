@@ -116,7 +116,9 @@ Command line:
 allInOneInstall\AllInOneInstall.exe --install-root=D:
 ```
 
-The installer checks/installs Git, Python, optional Node.js, then ComfyUI, JinFrame Assistant, and workflow sync. You can launch ComfyUI at the end.
+The installer checks/installs Git, Python, optional Node.js, then ComfyUI, JinFrame Assistant, and workflow sync.
+
+After install, use **`启动ComfyUI.bat`** in your ComfyUI folder (e.g. `D:\ComfyUI\ComfyUI\启动ComfyUI.bat`). User-level env vars `COMFYUI_ROOT`, `JINFRAME_REPO_ROOT`, and tool `PATH` entries are set automatically.
 
 Paths are saved to `jinframe_install_paths.json` (gitignored) for the next run.
 
