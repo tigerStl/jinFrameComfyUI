@@ -1,15 +1,24 @@
-# Replace CPU-only PyTorch with CUDA build (required for ComfyUI on NVIDIA GPUs).
-# RTX 50-series (5060/5070/5090, sm_120) needs cu128 nightly wheels.
+# Install PyTorch matching this machine's GPU (CUDA) or CPU fallback.
 # Usage:
 #   .\install\install_pytorch_cuda.ps1 -PythonExe "K:\tools\Python312\python.exe"
+#   .\install\install_pytorch_cuda.ps1 -PythonExe "..." -RepoRoot "K:\tiger\jinFrame\jinFrameComfyUI"
 
 param(
     [Parameter(Mandatory = $true)]
-    [string]$PythonExe
+    [string]$PythonExe,
+    [string]$RepoRoot = "",
+    [ValidateSet("", "cpu", "cu124", "cu128_nightly")]
+    [string]$Profile = ""
 )
 
 $ErrorActionPreference = "Stop"
 $PythonExe = [System.IO.Path]::GetFullPath($PythonExe)
+
+if (-not $RepoRoot) {
+    $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+}
+$RepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
+$ProfileFile = Join-Path $RepoRoot "jinframe_gpu_profile.json"
 
 function Write-Log([string]$Msg, [string]$Color = "White") {
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $Msg" -ForegroundColor $Color
@@ -19,6 +28,41 @@ function Invoke-Py {
     param([string[]]$PyArgs)
     $p = Start-Process -FilePath $PythonExe -ArgumentList $PyArgs -Wait -PassThru -NoNewWindow
     return $p.ExitCode
+}
+
+function Ensure-GpuProfile {
+    if ($Profile) {
+        return
+    }
+    if (-not (Test-Path $ProfileFile)) {
+        & (Join-Path $PSScriptRoot "detect_nvidia_gpu.ps1") -RepoRoot $RepoRoot -OutFile $ProfileFile
+    }
+    if (-not (Test-Path $ProfileFile)) {
+        throw "Missing $ProfileFile — run detect_nvidia_gpu.ps1 first"
+    }
+}
+
+function Get-ProfileObject {
+    Ensure-GpuProfile
+    $p = Get-Content $ProfileFile -Raw | ConvertFrom-Json
+    if ($Profile) {
+        $p | Add-Member -NotePropertyName torch_profile -NotePropertyValue $Profile -Force
+        switch ($Profile) {
+            "cu128_nightly" {
+                $p.torch_index_url = "https://download.pytorch.org/whl/nightly/cu128"
+                $p.torch_nightly = $true
+            }
+            "cu124" {
+                $p.torch_index_url = "https://download.pytorch.org/whl/cu124"
+                $p.torch_nightly = $false
+            }
+            "cpu" {
+                $p.torch_index_url = ""
+                $p.torch_nightly = $false
+            }
+        }
+    }
+    return $p
 }
 
 function Test-TorchCudaOk {
@@ -38,7 +82,7 @@ print("device", torch.cuda.get_device_name(0))
 }
 
 function Install-TorchFromIndex {
-    param([string]$IndexUrl, [switch]$Nightly)
+    param([string]$IndexUrl, [bool]$Nightly)
     Write-Log "pip uninstall torch / torchvision / torchaudio ..." "Yellow"
     & $PythonExe -m pip uninstall -y torch torchvision torchaudio 2>&1 | ForEach-Object { Write-Host "    $_" }
 
@@ -46,46 +90,64 @@ function Install-TorchFromIndex {
     if ($Nightly) { $pipArgs += "--pre" }
     $pipArgs += @("torch", "torchvision", "torchaudio", "--index-url", $IndexUrl)
 
-    Write-Log ("pip install " + ($pipArgs -join ' ')) "Cyan"
+    Write-Log ("pip install torch from index (10-30 min possible) ...") "Cyan"
     & $PythonExe @pipArgs
-    if ($LASTEXITCODE -ne 0) { return $false }
-    return $true
+    return ($LASTEXITCODE -eq 0)
 }
 
-Write-Log "=== JinFrame PyTorch CUDA setup ===" "Cyan"
+Write-Log "=== JinFrame PyTorch setup ===" "Cyan"
 Write-Log "Python: $PythonExe"
 
-if (Test-TorchCudaOk) {
-    Write-Log "PyTorch CUDA already OK" "Green"
-    & $PythonExe -c "import torch; print('cuda', torch.version.cuda, torch.cuda.get_device_name(0))"
+$gpu = Get-ProfileObject
+Write-Log "GPU: $($gpu.gpu_name)" "Cyan"
+Write-Log "Plan: $($gpu.torch_profile) — $($gpu.reason)" "DarkGray"
+
+if ($gpu.torch_profile -eq "cpu") {
+    Write-Log "CPU mode: keep PyTorch from requirements.txt (no CUDA wheels)." "Yellow"
+    Write-Log "ComfyUI will use --cpu; GPU workflows will not work until NVIDIA driver is installed." "Yellow"
     exit 0
 }
 
-Write-Log "Current PyTorch has no CUDA (CPU build). Installing GPU wheels ..." "Yellow"
-Write-Log "RTX 50-series needs cu128 nightly; older GPUs use cu124. This may take 10-30 min." "DarkGray"
-
-# 1) RTX 5060 / 5070 / 5090 (sm_120) — cu128 nightly
-if (Install-TorchFromIndex -IndexUrl "https://download.pytorch.org/whl/nightly/cu128" -Nightly) {
-    if (Test-TorchCudaOk) {
-        Write-Log "PyTorch cu128 nightly installed successfully" "Green"
-        exit 0
-    }
-    Write-Log "cu128 nightly installed but CUDA test failed; trying cu124 ..." "DarkYellow"
+if (Test-TorchCudaOk) {
+    Write-Log "PyTorch CUDA already OK for this machine" "Green"
+    & $PythonExe -c "import torch; print(torch.cuda.get_device_name(0))"
+    exit 0
 }
 
-# 2) RTX 30/40 etc. — stable cu124
-if (Install-TorchFromIndex -IndexUrl "https://download.pytorch.org/whl/cu124") {
-    if (Test-TorchCudaOk) {
-        Write-Log "PyTorch cu124 installed successfully" "Green"
+Write-Log "Installing PyTorch for profile: $($gpu.torch_profile)" "Yellow"
+
+$ok = Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:([bool]$gpu.torch_nightly)
+if ($ok -and (Test-TorchCudaOk)) {
+    Write-Log "PyTorch CUDA install OK ($($gpu.torch_profile))" "Green"
+    exit 0
+}
+
+# Fallback: opposite mainstream index (50xx nightly <-> cu124)
+if ($gpu.torch_profile -eq "cu128_nightly") {
+    Write-Log "cu128 nightly failed verify; trying cu124 ..." "DarkYellow"
+    if ((Install-TorchFromIndex -IndexUrl "https://download.pytorch.org/whl/cu124" -Nightly:$false) -and (Test-TorchCudaOk)) {
+        $gpu.torch_profile = "cu124"
+        $gpu.comfy_launch_extra = "--lowvram"
+        $gpu | ConvertTo-Json -Depth 4 | Set-Content -Path $ProfileFile -Encoding UTF8
+        Write-Log "Fallback cu124 OK; updated $ProfileFile" "Green"
+        exit 0
+    }
+} else {
+    Write-Log "cu124 failed verify; trying cu128 nightly ..." "DarkYellow"
+    if ((Install-TorchFromIndex -IndexUrl "https://download.pytorch.org/whl/nightly/cu128" -Nightly:$true) -and (Test-TorchCudaOk)) {
+        $gpu.torch_profile = "cu128_nightly"
+        $gpu | ConvertTo-Json -Depth 4 | Set-Content -Path $ProfileFile -Encoding UTF8
+        Write-Log "Fallback cu128 nightly OK" "Green"
         exit 0
     }
 }
 
 Write-Error @"
-PyTorch CUDA install failed.
-Manual fix (RTX 5060 / 50-series):
-  "$PythonExe" -m pip uninstall -y torch torchvision torchaudio
-  "$PythonExe" -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 --no-cache-dir
-Verify:
-  "$PythonExe" -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+PyTorch CUDA install failed for $($gpu.gpu_name).
+Profile tried: $($gpu.torch_profile)
+Verify driver: nvidia-smi
+Manual (RTX 3060 / 40系):
+  "$PythonExe" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+Manual (RTX 5060 / 50系):
+  "$PythonExe" -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
 "@

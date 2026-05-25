@@ -224,7 +224,7 @@ if (-not $SkipPip) {
     }
 
     Write-Phase "PyTorch CUDA (GPU)"
-    & (Join-Path $PSScriptRoot "install_pytorch_cuda.ps1") -PythonExe $Py
+    & (Join-Path $PSScriptRoot "install_pytorch_cuda.ps1") -PythonExe $Py -RepoRoot $RepoRoot
     if ($LASTEXITCODE -ne 0) {
         throw "PyTorch CUDA setup failed. ComfyUI needs NVIDIA GPU build of torch, not CPU-only."
     }
