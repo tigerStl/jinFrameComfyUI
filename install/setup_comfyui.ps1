@@ -13,7 +13,7 @@ param(
 $ErrorActionPreference = "Stop"
 $script:PhaseStart = Get-Date
 $script:StepIndex = 0
-$script:StepTotal = 7
+$script:StepTotal = 8
 
 function Write-Log {
     param([string]$Message, [string]$Color = "White")
@@ -260,10 +260,24 @@ if (-not $SkipPip) {
     Write-Phase "Skip pip (-SkipPip)"
 }
 
+Write-Phase "JinFrame Assistant"
+$env:COMFYUI_ROOT = $ComfyRoot
+$env:JINFRAME_REPO_ROOT = $RepoRoot
+$assistantScript = Join-Path $PSScriptRoot "install_jinframe_assistant.ps1"
+if (-not (Test-Path $assistantScript)) {
+    throw "Missing $assistantScript"
+}
+& $assistantScript -ComfyRoot $ComfyRoot
+$assistantDst = Join-Path $CustomNodes "ComfyUI_JinFrameAssistant"
+if (-not (Test-Path (Join-Path $assistantDst "__init__.py"))) {
+    throw "JinFrame Assistant not installed under $assistantDst"
+}
+Write-Log "JinFrame Assistant OK (restart ComfyUI to see chat button on right edge)" "Green"
+
 $env:COMFYUI_ROOT = $ComfyRoot
 $total = (Get-Date) - $script:PhaseStart
 Write-Host ""
 Write-Log ("ComfyUI setup done. Total {0:mm\:ss}" -f $total) "Green"
-Write-Log "Next: install_jinframe_assistant.ps1, sync_to_comfyui.ps1, MODELS.md" "Cyan"
+Write-Log "Next: sync_to_comfyui.ps1, MODELS.md; open ComfyUI and click the blue chat button" "Cyan"
 $launchBat = Join-Path $ComfyRoot "启动ComfyUI.bat"
 Write-Log "Start: $launchBat" "Cyan"
