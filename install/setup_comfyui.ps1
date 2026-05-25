@@ -185,6 +185,13 @@ import comfy
     return $p.ExitCode -eq 0
 }
 
+function Test-TorchCanImport {
+    param([string]$Py)
+    Write-Log "probe import torch ..." "DarkGray"
+    $p = Start-Process -FilePath $Py -ArgumentList @("-c", "import torch") -Wait -PassThru -NoNewWindow
+    return $p.ExitCode -eq 0
+}
+
 Write-Phase "Verify ComfyUI source"
 $comfyPkg = Join-Path $ComfyRoot "comfy"
 if (-not (Test-Path (Join-Path $comfyPkg "options.py"))) {
@@ -208,9 +215,14 @@ if (-not $SkipPip) {
     Write-Log "bootstrap pip ..." "DarkGray"
     & $bootstrap -PythonExe $Py
 
-    if ((-not $Force) -and (Test-ComfyCanImport -Py $Py -ComfyRoot $ComfyRoot)) {
-        Write-Log "skip ComfyUI requirements.txt - comfy import OK" "DarkGray"
+    $comfyOk = Test-ComfyCanImport -Py $Py -ComfyRoot $ComfyRoot
+    $torchOk = Test-TorchCanImport -Py $Py
+    if ((-not $Force) -and $comfyOk -and $torchOk) {
+        Write-Log "skip ComfyUI requirements.txt - comfy and torch import OK" "DarkGray"
     } else {
+        if ($comfyOk -and -not $torchOk) {
+            Write-Log "comfy OK but torch missing - will install requirements + CUDA torch" "Yellow"
+        }
         $reqMain = Join-Path $ComfyRoot "requirements.txt"
         if (Test-Path $reqMain) {
             Write-Log "pip install ComfyUI requirements.txt - FIRST RUN often 15-45 min, please wait" "Yellow"

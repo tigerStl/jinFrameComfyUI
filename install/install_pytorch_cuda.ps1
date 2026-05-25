@@ -30,6 +30,33 @@ function Invoke-Py {
     return $p.ExitCode
 }
 
+function Invoke-Pip {
+    param([string[]]$PipArgs, [switch]$Quiet)
+    $allArgs = @("-m", "pip") + $PipArgs
+    $prevEa = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        if ($Quiet) {
+            $out = Join-Path $env:TEMP ("jinframe_pip_{0}.log" -f [Guid]::NewGuid().ToString("N"))
+            $p = Start-Process -FilePath $PythonExe -ArgumentList $allArgs -Wait -PassThru -NoNewWindow `
+                -RedirectStandardOutput $out -RedirectStandardError $out
+            if (Test-Path $out) {
+                Get-Content $out -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    $_" }
+                Remove-Item $out -Force -ErrorAction SilentlyContinue
+            }
+            return $p.ExitCode
+        }
+        $p = Start-Process -FilePath $PythonExe -ArgumentList $allArgs -Wait -PassThru -NoNewWindow
+        return $p.ExitCode
+    } finally {
+        $ErrorActionPreference = $prevEa
+    }
+}
+
+function Test-TorchInstalled {
+    return (Invoke-Py -PyArgs @("-c", "import torch")) -eq 0
+}
+
 function Ensure-GpuProfile {
     if ($Profile) {
         return
@@ -66,6 +93,9 @@ function Get-ProfileObject {
 }
 
 function Test-TorchCudaOk {
+    if (-not (Test-TorchInstalled)) {
+        return $false
+    }
     $probe = Join-Path $PSScriptRoot "probe_torch_cuda.py"
     if (-not (Test-Path $probe)) {
         throw "Missing probe_torch_cuda.py under install/"
@@ -77,15 +107,15 @@ function Test-TorchCudaOk {
 function Install-TorchFromIndex {
     param([string]$IndexUrl, [bool]$Nightly)
     Write-Log "pip uninstall torch / torchvision / torchaudio ..." "Yellow"
-    & $PythonExe -m pip uninstall -y torch torchvision torchaudio 2>&1 | ForEach-Object { Write-Host "    $_" }
+    Invoke-Pip -PipArgs @("uninstall", "-y", "torch", "torchvision", "torchaudio") -Quiet | Out-Null
 
-    $pipArgs = @("-m", "pip", "install", "--no-cache-dir")
+    $pipArgs = @("install", "--no-cache-dir")
     if ($Nightly) { $pipArgs += "--pre" }
     $pipArgs += @("torch", "torchvision", "torchaudio", "--index-url", $IndexUrl)
 
     Write-Log "pip install torch from index (10-30 min possible) ..." "Cyan"
-    & $PythonExe @pipArgs
-    return ($LASTEXITCODE -eq 0)
+    $code = Invoke-Pip -PipArgs $pipArgs
+    return ($code -eq 0)
 }
 
 Write-Log "=== JinFrame PyTorch setup ===" "Cyan"
@@ -103,10 +133,13 @@ if ($gpu.torch_profile -eq "cpu") {
 
 if (Test-TorchCudaOk) {
     Write-Log "PyTorch CUDA already OK for this machine" "Green"
-    & $PythonExe -c "import torch; print(torch.cuda.get_device_name(0))"
+    Invoke-Py -PyArgs @("-c", "import torch; print(torch.cuda.get_device_name(0))") | Out-Null
     exit 0
 }
 
+if (-not (Test-TorchInstalled)) {
+    Write-Log "torch not installed yet; installing CUDA wheels ..." "DarkGray"
+}
 Write-Log "Installing PyTorch for profile: $($gpu.torch_profile)" "Yellow"
 
 $ok = Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:([bool]$gpu.torch_nightly)

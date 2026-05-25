@@ -1,7 +1,10 @@
 """Verify PyTorch was built with CUDA and can see GPU 0. Exit 1/2 on failure."""
 import sys
 
-import torch
+try:
+    import torch
+except ImportError:
+    sys.exit(3)
 
 if not torch.cuda.is_available():
     sys.exit(1)
