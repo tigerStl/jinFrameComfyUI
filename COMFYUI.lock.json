@@ -1,0 +1,67 @@
+{
+  "lock_version": 1,
+  "locked_at": "2026-05-25T00:00:00Z",
+  "description": "Pinned ComfyUI runtime matching the tested Windows install. ComfyUI is cloned locally by install/setup_comfyui.ps1 and is not committed to Git.",
+  "default_comfy_root": "C:\\ComfyUI\\ComfyUI",
+  "python_note": "Windows portable installs often use ComfyUI\\python_embeded\\python.exe (e.g. 3.13.x). System python also works if dependencies install cleanly.",
+  "comfyui": {
+    "repo": "https://github.com/Comfy-Org/ComfyUI.git",
+    "tag": "v0.21.1",
+    "revision": "26515acd23fa291a8f5ab53c5997258598de0701",
+    "label": "ComfyUI v0.21.1 (Comfy-Org)"
+  },
+  "custom_nodes": [
+    {
+      "name": "ComfyUI-Manager",
+      "repo": "https://github.com/ltdrdata/ComfyUI-Manager.git",
+      "revision": "a2c41a2a21ffff3c8f1dfc6da2010967ef87538e",
+      "required": true,
+      "note": "安装其它节点、更新 ComfyUI"
+    },
+    {
+      "name": "ComfyUI-GGUF",
+      "repo": "https://github.com/city96/ComfyUI-GGUF.git",
+      "revision": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
+      "required": true,
+      "note": "Wan 2.2 I2V GGUF 工作流"
+    },
+    {
+      "name": "ComfyUI_LTX2_SM",
+      "repo": "https://github.com/j9460429/ComfyUI_LTX2_SM.git",
+      "revision": "15db603badf867dd82992505ff1d8cec6afe0383",
+      "required": true,
+      "pip_requirements": "requirements.txt",
+      "note": "LTX 2.3 本地 GGUF 路线"
+    },
+    {
+      "name": "ComfyUI-SVD",
+      "repo": "https://github.com/kijai/ComfyUI-SVD",
+      "revision": "00496141738adb7ace4767dc2cc2ee6aaff68cc5",
+      "required": false,
+      "note": "可选"
+    }
+  ],
+  "extension_from_repo": [
+    {
+      "name": "ComfyUI_JinFrameAssistant",
+      "source": "comfyui_extension/ComfyUI_JinFrameAssistant",
+      "install_script": "install/install_jinframe_assistant.ps1"
+    }
+  ],
+  "model_subdirs": [
+    "checkpoints",
+    "checkpoints/hunyuan_dit_comfyui",
+    "clip",
+    "diffusion_models",
+    "gguf",
+    "loras",
+    "text_encoders",
+    "unet",
+    "vae",
+    "LLM/checkpoints"
+  ],
+  "launch": {
+    "low_vram_args": "--lowvram",
+    "hunyuan_extra_args": "--cpu-vae"
+  }
+}

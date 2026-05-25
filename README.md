@@ -2,7 +2,7 @@
 
 **金帧 AI 视频平台**是一套面向 ComfyUI 的**图像 + 视频**生产方案：预置可直接运行的标准工作流、一键模型下载、工作流同步与安全清理工具，并内置 **金帧助手** 面板，让不熟悉命令行的用户也能在界面里完成「下模型 → 开工作流 → 对话改流程」。
 
-> 大模型权重（`.safetensors` / `.gguf`）体积大，**不随 Git 分发**；版本由 **`MODELS.lock.json`** 锁定（HF commit + SHA256）。第二台机见 [`MODELS.md`](MODELS.md)。
+> 模型文件（`.safetensors` / `.gguf`）体积较大，需单独下载。平台已为各工作流锁定固定版本，安装与校验步骤见 **[模型安装说明（MODELS.md）](MODELS.md)**。
 
 ---
 
@@ -97,21 +97,64 @@
 
 ## 快速开始（推荐顺序）
 
-### 1. 准备 ComfyUI
-
-- 已有 ComfyUI：记下安装目录，默认 `C:\ComfyUI\ComfyUI`，或用环境变量 `COMFYUI_ROOT` 指定。  
-- 从零安装：在本仓库根目录执行 `.\install\setup_comfyui.ps1`（克隆 ComfyUI、安装 LTX 相关自定义节点与依赖）。
-
-### 2. 安装金帧助手并同步工作流
+### 1. 获取本仓库
 
 ```powershell
-.\install\install_jinframe_assistant.ps1
-.\install\sync_to_comfyui.ps1
+git clone https://github.com/tigerStl/jinFrameComfyUI.git
+cd jinFrameComfyUI
 ```
 
-重启 ComfyUI → 打开右侧 **💬** → 勾选需要的模型包 → **一键下载** → 在侧栏 `workflows` 中加载对应 JSON。
+### 2. 安装 ComfyUI（固定版本）
 
-### 3. 按任务选工作流
+平台测试环境为 **ComfyUI v0.21.1**（[Comfy-Org/ComfyUI](https://github.com/Comfy-Org/ComfyUI)），版本号写在 **`COMFYUI.lock.json`** 中。  
+**ComfyUI 程序本体不会提交到 Git**（体积大、更新频繁）；安装脚本会在您电脑上按锁定版本**自动克隆**。
+
+**方式 A — 装在仓库旁的 `comfyui` 文件夹（默认，推荐新用户）**
+
+```powershell
+.\install\setup_comfyui.ps1
+$env:COMFYUI_ROOT = (Resolve-Path .\comfyui\ComfyUI).Path
+```
+
+**方式 B — 装到独立目录（与官方 Windows 包目录类似）**
+
+```powershell
+.\install\setup_comfyui.ps1 -ComfyRoot "D:\ComfyUI\ComfyUI"
+$env:COMFYUI_ROOT = "D:\ComfyUI\ComfyUI"
+```
+
+脚本会安装锁定版本的 ComfyUI，以及 **ComfyUI-Manager**、**ComfyUI-GGUF**、**ComfyUI_LTX2_SM** 等节点（见 `COMFYUI.lock.json`）。
+
+**启动 ComfyUI（8GB 显卡示例）**
+
+```powershell
+cd $env:COMFYUI_ROOT
+python main.py --lowvram
+```
+
+若使用官方 **Windows 便携包**且已自带 `python_embeded\python.exe`，可在该目录下执行：
+
+```powershell
+.\python_embeded\python.exe main.py --lowvram
+```
+
+混元等工作流若显存紧张，可再加 `--cpu-vae`（见各工作流说明）。
+
+**若您已自行安装 ComfyUI**  
+请确认版本与 `COMFYUI.lock.json` 一致，或重新运行 `setup_comfyui.ps1 -ComfyRoot "您的路径"` 对齐节点与提交号。
+
+### 3. 金帧助手、工作流与模型
+
+```powershell
+.\install\install_jinframe_assistant.ps1 -ComfyRoot $env:COMFYUI_ROOT
+.\install\sync_to_comfyui.ps1 -ComfyRoot $env:COMFYUI_ROOT
+```
+
+按 **[MODELS.md](MODELS.md)** 下载所需模型（或 ComfyUI 内金帧助手 **一键下载**）。
+
+完全退出并重启 ComfyUI → 右侧 **💬** → 在侧栏 `workflows` 打开对应 JSON。
+
+### 4. 按任务选工作流
 
 | 你想做… | 打开… |
 |---------|--------|
@@ -122,7 +165,7 @@
 | 高质量 LTX 视频（大显存） | `ltx23_i2v distilled.json` 或 `ltx云GPU/` 下工作流 |
 | 多镜头短片 | 先看 `wan视频流/00_分镜流程说明.md` |
 
-### 4.（可选）用对话改工作流
+### 5.（可选）用对话改工作流
 
 1. 设置 `JINFRAME_REPO_ROOT` 为本仓库根目录。  
 2. 在助手中启用 **Cursor Agent** 并保存 API Key。  
@@ -130,12 +173,24 @@
 
 ---
 
+## 为何 ComfyUI 不直接放在本 Git 仓库里？
+
+| 原因 | 说明 |
+|------|------|
+| 体积 | ComfyUI + 自定义节点 + `models` 可达数十 GB，不适合 Git 克隆 |
+| 更新 | 上游频繁发版；平台用 **`COMFYUI.lock.json`** 固定**测试通过的提交号**，避免「最新 main」导致节点不兼容 |
+| 模型 | 权重仍单独下载（见 **MODELS.lock.json** / **MODELS.md**） |
+
+您本地安装后，ComfyUI 位于 `comfyui\ComfyUI`（默认）或您指定的 `-ComfyRoot`，**不会**被 `git push` 上传。
+
+---
+
 ## 目录约定
 
 | 路径 | 说明 |
 |------|------|
-| **本仓库根目录** | 工作流、`install/`、金帧助手源码、文档 |
-| **ComfyUI 安装目录** | 运行环境；工作流同步到 `user\default\workflows\` |
+| **本仓库根目录** | 工作流、`install/`、金帧助手源码、`COMFYUI.lock.json`、`MODELS.lock.json` |
+| **ComfyUI 安装目录** | 运行环境（`setup_comfyui.ps1` 克隆；默认 `comfyui\ComfyUI`，已在 `.gitignore`） |
 | **工作流备份目录（可选）** | 精简脚本移出的历史 JSON；需要时复制回 `workflows\` |
 
 ---
@@ -455,7 +510,8 @@
 
 | 脚本 / 工具 | 用途 |
 |-------------|------|
-| `install\setup_comfyui.ps1` | 克隆 ComfyUI、LTX 节点、安装 Python 依赖、创建模型目录 |
+| `install\setup_comfyui.ps1` | 按 `COMFYUI.lock.json` 安装 ComfyUI v0.21.1 与必需节点 |
+| `install\generate_comfyui_lock.py` | 维护用：从本机 ComfyUI 导出新的版本锁定 |
 | `install\sync_to_comfyui.ps1` | 同步工作流；可选同步蒸馏 LoRA |
 | `install\install_jinframe_assistant.ps1` | 安装金帧助手到 `custom_nodes` |
 | `install\install_flux_schnell_fp8.ps1` | FLUX Schnell fp8 相关资源 |
@@ -470,7 +526,7 @@
 | `install\prune_workflows.py` | 将非标准工作流移至本机备份（`--dry-run` 可预览） |
 | `install\download_from_lock.py` | 按 `MODELS.lock.json` 下载锁定版本 |
 | `install\verify_models.py` | 校验本机模型 SHA256 / 体积 |
-| `install\generate_models_lock.py` | 在测试机上重新生成锁文件 |
+| `install\generate_models_lock.py` | 维护用：根据本机已安装模型更新版本清单 |
 
 仅同步工作流：
 
@@ -503,13 +559,15 @@
 
 ---
 
-## 模型权重与版本锁定
+## 模型文件安装
 
-- Git 仓库**不包含**大权重本体（见 `.gitignore`），但包含 **`MODELS.lock.json`**（测试通过的 commit + SHA256）。  
-- **第二台电脑**：`python install\download_from_lock.py --pack <包名>` → `python install\verify_models.py`（详见 [`MODELS.md`](MODELS.md)）。  
-- 金帧助手「一键下载」与 `install\install_hunyuan_dit.ps1` 等脚本均会读取锁文件，**不再使用** `resolve/main`。  
-- 在测试机上更新锁：`python install\generate_models_lock.py --comfy-root <ComfyUI路径>`。  
-- LTX 蒸馏 LoRA 可从仓库 `distill_loras\` 由 `sync_to_comfyui.ps1` 复制。
+- 克隆本仓库后，**不会**自动附带大型模型权重；请按 **[MODELS.md](MODELS.md)** 下载与您要使用的工作流对应的文件。  
+- 推荐方式一：在 ComfyUI 中打开金帧助手，勾选模型包后点击 **一键下载**（版本与平台测试环境一致）。  
+- 推荐方式二：在本仓库根目录执行  
+  `python install\download_from_lock.py --pack <包名>`，完成后运行  
+  `python install\verify_models.py` 确认文件完整。  
+- 具体命令、包名对照与常见问题，均以 **MODELS.md** 为准。  
+- LTX 蒸馏 LoRA 可在执行 `sync_to_comfyui.ps1` 时从仓库 `distill_loras\` 复制到 ComfyUI（若您已持有该文件）。
 
 ---
 
@@ -528,29 +586,24 @@
 ## Quick start
 
 ```powershell
-.\install\install_jinframe_assistant.ps1
-.\install\sync_to_comfyui.ps1
+git clone https://github.com/tigerStl/jinFrameComfyUI.git
+cd jinFrameComfyUI
+.\install\setup_comfyui.ps1
+$env:COMFYUI_ROOT = (Resolve-Path .\comfyui\ComfyUI).Path
+.\install\install_jinframe_assistant.ps1 -ComfyRoot $env:COMFYUI_ROOT
+.\install\sync_to_comfyui.ps1 -ComfyRoot $env:COMFYUI_ROOT
+cd $env:COMFYUI_ROOT
+python main.py --lowvram
 ```
 
-Restart ComfyUI → **💬** panel → download model packs → load workflows from the sidebar.
+ComfyUI **v0.21.1** is pinned in `COMFYUI.lock.json` (not stored inside Git). See **MODELS.md** for checkpoints.
 
-Set `JINFRAME_REPO_ROOT` (repo root) and `COMFYUI_ROOT` (ComfyUI install) as needed.
+## Model installation
 
-## Model version locking
+Checkpoints are downloaded separately (not bundled in Git). Follow **[MODELS.md](MODELS.md)** for the full list, download commands, and verification steps.
 
-Large checkpoints are **not** in Git (see `.gitignore`). Reproducible installs use **`MODELS.lock.json`** (pinned Hugging Face commit + SHA256). See [`MODELS.md`](MODELS.md).
-
-**Second machine:**
-
-```powershell
-$env:COMFYUI_ROOT = "C:\ComfyUI\ComfyUI"   # your path
-.\install\sync_to_comfyui.ps1
-python install\download_from_lock.py --pack hunyuan_dit
-python install\verify_models.py --pack hunyuan_dit
-```
-
-- JinFrame Assistant downloads and `install\*.ps1` scripts read the lock file (no `resolve/main`).
-- Regenerate lock on the tested machine: `python install\generate_models_lock.py --comfy-root <ComfyUI path>`.
-- Copy `vae\ae.safetensors` from the test machine if needed (`ae` is local-verified only).
+- **Easiest:** JinFrame Assistant in ComfyUI → check model packs → **one-click download**.  
+- **Script:** `python install\download_from_lock.py --pack <pack_id>` then `python install\verify_models.py`.  
+- Set `COMFYUI_ROOT` to your ComfyUI install path before running scripts (see MODELS.md).
 
 Per-workflow guides (inputs, parameters, pipelines) are in the Chinese section **[预设流程详细说明](#预设流程详细说明)**. See `workflows/工作流目录说明.md` for the folder layout.

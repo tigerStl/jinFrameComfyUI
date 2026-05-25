@@ -42,8 +42,8 @@ After restart:
   - Agent OFF: chat uses Ollama Qwen (ollama pull qwen2.5:7b)
   - Models: checkboxes -> [One-click download]
 
-Set repo for Agent (if not default path):
-  `$env:JINFRAME_REPO_ROOT = "c:\tiger\videoModel\jinFrameComfyUI"`
+Set repo for Agent (path to this git clone):
+  `$env:JINFRAME_REPO_ROOT = "<path-to-jinFrameComfyUI>"`
 
 Optional env:
   OLLAMA_HOST=http://127.0.0.1:11434

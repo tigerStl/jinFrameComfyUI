@@ -1,102 +1,104 @@
-# jinFrameComfyUI 本地 ComfyUI 安装（基于 j9460429/sulphur2-install-notes）
-# 用法: .\install\setup_comfyui.ps1
-# 可选: .\install\setup_comfyui.ps1 -DownloadGguf   # 额外下载 GGUF Q6_K (~18GB)
+# Install pinned ComfyUI + custom nodes from COMFYUI.lock.json
+# Usage (from repo root):
+#   .\install\setup_comfyui.ps1
+#   .\install\setup_comfyui.ps1 -ComfyRoot "D:\ComfyUI\ComfyUI"
+#
+# Default install folder when -ComfyRoot omitted: .\comfyui\ComfyUI (under this repo, gitignored)
 
 param(
-    [switch]$DownloadGguf,
-    [string]$Quant = "Q6_K"
+    [string]$ComfyRoot = "",
+    [switch]$SkipPip
 )
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$ComfyUI = Join-Path $RepoRoot "comfyui\ComfyUI"
+$LockFile = Join-Path $RepoRoot "COMFYUI.lock.json"
 
-Write-Host "Repo:    $RepoRoot"
-Write-Host "ComfyUI: $ComfyUI"
+if (-not (Test-Path $LockFile)) {
+    throw "Missing COMFYUI.lock.json"
+}
+
+$Lock = Get-Content $LockFile -Raw | ConvertFrom-Json
+
+if (-not $ComfyRoot) {
+    $ComfyRoot = Join-Path $RepoRoot "comfyui\ComfyUI"
+}
+$ComfyRoot = [System.IO.Path]::GetFullPath($ComfyRoot)
+$CustomNodes = Join-Path $ComfyRoot "custom_nodes"
+
+Write-Host "=== JinFrame ComfyUI setup (pinned) ===" -ForegroundColor Cyan
+Write-Host "Repo:  $RepoRoot"
+Write-Host "Comfy: $ComfyRoot"
+Write-Host "Lock:  ComfyUI $($Lock.comfyui.tag) @ $($Lock.comfyui.revision.Substring(0,12))..."
 Write-Host ""
 
-function Ensure-Repo {
-    param([string]$Url, [string]$Path)
+function Ensure-GitRepo {
+    param(
+        [string]$Url,
+        [string]$Path,
+        [string]$Revision,
+        [string]$Label = "",
+        [string]$Tag = ""
+    )
+    $parent = Split-Path $Path -Parent
+    if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+
     if (Test-Path (Join-Path $Path ".git")) {
-        Write-Host "[skip] $Path"
+        Write-Host "[git] sync $Label -> $($Revision.Substring(0,12))..." -ForegroundColor Yellow
+        git -C $Path fetch origin 2>$null
+        git -C $Path checkout -f $Revision
         return
     }
     if (Test-Path $Path) { Remove-Item $Path -Recurse -Force }
-    git clone --depth 1 $Url $Path
-}
-
-function Link-File {
-    param([string]$Target, [string]$Link)
-    $Target = (Resolve-Path $Target).Path
-    if (Test-Path $Link) { return }
-    $dir = Split-Path $Link -Parent
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    try {
-        New-Item -ItemType HardLink -Path $Link -Target $Target | Out-Null
-        Write-Host "[link] $(Split-Path $Link -Leaf)"
-    } catch {
-        cmd /c mklink /H "`"$Link`"" "`"$Target`"" | Out-Null
-        Write-Host "[link] $(Split-Path $Link -Leaf) (mklink)"
+    Write-Host "[git] clone $Label" -ForegroundColor Green
+    if ($Tag) {
+        git clone --depth 1 --branch $Tag $Url $Path
+    } else {
+        git clone $Url $Path
+        git -C $Path checkout -f $Revision
     }
 }
 
-# --- clone（若缺失）---
-Ensure-Repo "https://github.com/j9460429/sulphur2-install-notes.git" (Join-Path $RepoRoot "install\sulphur2-install-notes")
-Ensure-Repo "https://github.com/comfyanonymous/ComfyUI.git" $ComfyUI
-Ensure-Repo "https://github.com/j9460429/ComfyUI_LTX2_SM.git" (Join-Path $ComfyUI "custom_nodes\ComfyUI_LTX2_SM")
+# --- ComfyUI core ---
+$tag = $Lock.comfyui.tag
+$rev = $Lock.comfyui.revision
+Ensure-GitRepo -Url $Lock.comfyui.repo -Path $ComfyRoot -Revision $rev -Tag $tag -Label "ComfyUI $tag"
+
+# --- custom nodes ---
+foreach ($node in $Lock.custom_nodes) {
+    if (-not $node.required) { continue }
+    $dest = Join-Path $CustomNodes $node.name
+    Ensure-GitRepo -Url $node.repo -Path $dest -Revision $node.revision -Label $node.name -Tag ""
+}
+
+# --- model dirs ---
+$models = Join-Path $ComfyRoot "models"
+foreach ($sub in $Lock.model_subdirs) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $models $sub) | Out-Null
+}
 
 # --- pip ---
-Write-Host ""
-Write-Host "pip install ComfyUI_LTX2_SM requirements..."
-python -m pip install -r (Join-Path $ComfyUI "custom_nodes\ComfyUI_LTX2_SM\requirements.txt")
-
-# --- 模型目录 ---
-$models = Join-Path $ComfyUI "models"
-@("gguf", "loras", "vae", "text_encoders", "diffusion_models", "Sulphur\promptenhancer") | ForEach-Object {
-    New-Item -ItemType Directory -Force -Path (Join-Path $models $_) | Out-Null
-}
-
-# --- 链接本仓库已有权重（省磁盘）---
-Write-Host ""
-Write-Host "Linking weights from repo root..."
-Link-File (Join-Path $RepoRoot "sulphur_dev_bf16.safetensors") (Join-Path $models "diffusion_models\sulphur_dev_bf16.safetensors")
-Link-File (Join-Path $RepoRoot "sulphur_dev_fp8mixed.safetensors") (Join-Path $models "diffusion_models\sulphur_dev_fp8mixed.safetensors")
-$distil = Get-ChildItem (Join-Path $RepoRoot "distill_loras\*.safetensors") -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($distil) {
-    Link-File $distil.FullName (Join-Path $models "loras\$($distil.Name)")
-}
-$mmproj = Join-Path $RepoRoot "prompt_enhancer\mmproj-BF16.gguf"
-if (Test-Path $mmproj) {
-    Link-File $mmproj (Join-Path $models "Sulphur\promptenhancer\mmproj-BF16.gguf")
-}
-
-# --- 可选：按 install-notes 下载 GGUF / VAE / T5 ---
-if ($DownloadGguf) {
-    $gguf = Join-Path $models "gguf\sulphur_distil-$Quant.gguf"
-    if (-not (Test-Path $gguf)) {
-        Write-Host "Downloading GGUF $Quant..."
-        curl.exe -L -o $gguf "https://huggingface.co/vantagewithai/Sulphur-2-Base-GGUF/resolve/main/sulphur_distil-$Quant.gguf"
+if (-not $SkipPip) {
+    $Py = Join-Path (Split-Path $ComfyRoot -Parent) "python_embeded\python.exe"
+    if (-not (Test-Path $Py)) { $Py = "python" }
+    foreach ($node in $Lock.custom_nodes) {
+        $req = $node.pip_requirements
+        if (-not $req) { continue }
+        $reqPath = Join-Path $CustomNodes (Join-Path $node.name $req)
+        if (Test-Path $reqPath) {
+            Write-Host "[pip] $($node.name)" -ForegroundColor Green
+            & $Py -m pip install -r $reqPath -q
+        }
     }
 }
 
-$vae = Join-Path $models "vae\ltx_2.3_vae.safetensors"
-if (-not (Test-Path $vae)) {
-    Write-Host "Downloading LTX 2.3 VAE..."
-    curl.exe -L -o $vae "https://huggingface.co/Lightricks/LTX-Video-2.3/resolve/main/vae.safetensors"
-}
-
-$t5 = Join-Path $models "text_encoders\ltx_2.3_t5.safetensors"
-if (-not (Test-Path $t5)) {
-    Write-Host "Downloading LTX 2.3 text encoder..."
-    curl.exe -L -o $t5 "https://huggingface.co/Lightricks/LTX-Video-2.3/resolve/main/text_encoder.safetensors"
-}
-
+$env:COMFYUI_ROOT = $ComfyRoot
 Write-Host ""
-Write-Host "Done. Start ComfyUI:"
-Write-Host "  cd `"$ComfyUI`""
-Write-Host "  python main.py"
+Write-Host "Next steps:" -ForegroundColor Cyan
+Write-Host "  .\install\install_jinframe_assistant.ps1 -ComfyRoot `"$ComfyRoot`""
+Write-Host "  .\install\sync_to_comfyui.ps1 -ComfyRoot `"$ComfyRoot`""
+Write-Host "  See MODELS.md for model downloads"
 Write-Host ""
-Write-Host "Smoke test workflow:"
-Write-Host "  $RepoRoot\install\sulphur2-install-notes\workflows\sulphur2_t2v_smoke_test.json"
-Write-Host "Official workflows in repo:"
-Write-Host "  $RepoRoot\workflows\"
+Write-Host "Start ComfyUI (8GB GPU example):" -ForegroundColor Cyan
+Write-Host "  cd `"$ComfyRoot`""
+Write-Host "  python main.py $($Lock.launch.low_vram_args)"
