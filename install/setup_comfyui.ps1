@@ -77,17 +77,60 @@ foreach ($sub in $Lock.model_subdirs) {
     New-Item -ItemType Directory -Force -Path (Join-Path $models $sub) | Out-Null
 }
 
+function Resolve-PythonForComfy {
+    param([string]$ComfyRoot)
+    if ($env:JINFRAME_PYTHON -and (Test-Path $env:JINFRAME_PYTHON)) {
+        return $env:JINFRAME_PYTHON
+    }
+    $driveRoot = [System.IO.Path]::GetPathRoot($ComfyRoot)
+    if ($driveRoot) {
+        $toolsPy = Join-Path $driveRoot "tools\Python312\python.exe"
+        if (Test-Path $toolsPy) { return $toolsPy }
+    }
+    $emb = Join-Path (Split-Path $ComfyRoot -Parent) "python_embeded\python.exe"
+    if (Test-Path $emb) { return $emb }
+    return "python"
+}
+
+# --- verify clone ---
+$comfyPkg = Join-Path $ComfyRoot "comfy"
+if (-not (Test-Path (Join-Path $comfyPkg "options.py"))) {
+    throw @"
+ComfyUI 源码不完整：未找到 $comfyPkg\options.py
+请确认 Git 已安装且网络可访问 GitHub，然后重新运行：
+  .\install\setup_comfyui.ps1 -ComfyRoot "$ComfyRoot"
+若目录曾有残缺文件，可先删除整个 $ComfyRoot 后重试。
+"@
+}
+
 # --- pip ---
 if (-not $SkipPip) {
-    $Py = Join-Path (Split-Path $ComfyRoot -Parent) "python_embeded\python.exe"
-    if (-not (Test-Path $Py)) { $Py = "python" }
+    $Py = Resolve-PythonForComfy -ComfyRoot $ComfyRoot
+    Write-Host "[python] $Py" -ForegroundColor Cyan
+    $env:PYTHONPATH = $ComfyRoot
+
+    & $Py -m pip --version 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[pip] bootstrap (ensurepip)..." -ForegroundColor Yellow
+        & $Py -m ensurepip --upgrade
+    }
+
+    $reqMain = Join-Path $ComfyRoot "requirements.txt"
+    if (Test-Path $reqMain) {
+        Write-Host "[pip] ComfyUI requirements.txt (may take several minutes)..." -ForegroundColor Green
+        & $Py -m pip install -r $reqMain
+        if ($LASTEXITCODE -ne 0) {
+            throw "pip install ComfyUI requirements failed. Try: `"$Py`" -m pip install -r `"$reqMain`""
+        }
+    }
+
     foreach ($node in $Lock.custom_nodes) {
         $req = $node.pip_requirements
         if (-not $req) { continue }
         $reqPath = Join-Path $CustomNodes (Join-Path $node.name $req)
         if (Test-Path $reqPath) {
             Write-Host "[pip] $($node.name)" -ForegroundColor Green
-            & $Py -m pip install -r $reqPath -q
+            & $Py -m pip install -r $reqPath
         }
     }
 }
