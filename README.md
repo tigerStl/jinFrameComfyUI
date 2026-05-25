@@ -611,6 +611,11 @@ python main.py --lowvram
 - **本仓库**（工作流 JSON、`install/` 脚本、金帧助手扩展、文档等）：**Copyright © 2026 Gengfeng Liu / 金帧AI工作室**，采用 **[Apache License 2.0](LICENSE)**；分发时请保留 [NOTICE](NOTICE) 中的归属说明。
 - **第三方模型权重**（FLUX、Wan、LTX、混元、Kolors、SDXL 等 `.safetensors` / `.gguf`）**不包含在本仓库**，须遵守各模型提供方及 Hugging Face 页面上的许可；LTX 相关文本见 [licenses/LTX-2-Community-License.txt](licenses/LTX-2-Community-License.txt)。模型安装与合规说明见 **[MODELS.md](MODELS.md)**。
 
+## 联系
+
+- **使用问题、Bug、功能建议**：[GitHub Issues](https://github.com/tigerStl/jinFrameComfyUI/issues)
+- **合作、许可与其它事务**：[tiger.saint88@gmail.com](mailto:tiger.saint88@gmail.com)（金帧AI工作室）
+
 ---
 
 ## English documentation
