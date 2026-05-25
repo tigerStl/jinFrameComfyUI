@@ -11,7 +11,11 @@
 
 可选参数
 --------
-  --comfy-root=D:\ComfyUI\ComfyUI   指定 ComfyUI 安装路径
+  --install-root=D:\JinFrameAI        安装根目录（推荐，避免 C 盘）
+  --comfy-root=D:\JinFrameAI\ComfyUI\ComfyUI   仅指定 ComfyUI 路径
+
+首次运行会列出各磁盘剩余空间，并默认选择非 C 盘。
+配置会保存到仓库根目录 jinframe_install_paths.json（已 gitignore）。
 
 说明
 ----

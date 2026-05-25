@@ -24,6 +24,9 @@ Thumbs.db
 # ComfyUI outputs
 output/
 
+# Per-machine install paths written by 一键安装.exe
+jinframe_install_paths.json
+
 # Local scan / temp
 install/_hits.txt
 install/_scan_result.txt

@@ -107,8 +107,25 @@
 
 或运行 `allInOneInstall\一键安装.exe`（若无中文文件名则用 `AllInOneInstall.exe`）。
 
-程序将自动检查并安装 Git、Python 3.12（若需要）、可选 Node.js，再执行 ComfyUI 与金帧助手安装，最后询问是否启动 ComfyUI。  
-安装程序**源码**在独立目录 `jinFrameComfyUIInstall`（不在本仓库）；本仓库仅包含编译好的 exe。
+**首次运行会提示选择安装盘符/目录**（默认优先非 C 盘，例如 `D:\JinFrameAI`）。  
+ComfyUI 与 **models 模型** 将安装在该目录下，避免占满 C 盘：
+
+```text
+D:\JinFrameAI\
+  ComfyUI\ComfyUI\     ← 程序与工作流
+  ComfyUI\ComfyUI\models\  ← 模型（体积最大）
+  tools\Python312\    ← 若无合适系统 Python 时安装到此
+  tools\Git\
+```
+
+也可命令行指定：
+
+```powershell
+allInOneInstall\AllInOneInstall.exe --install-root=E:\AI\JinFrame
+```
+
+程序将自动检查并安装 Git、Python、可选 Node.js，再安装 ComfyUI 与金帧助手，最后询问是否启动。  
+安装程序**源码**在 `jinFrameComfyUIInstall`（不在本仓库）。
 
 ### 1. 获取本仓库
 
