@@ -97,6 +97,19 @@
 
 ## 快速开始（推荐顺序）
 
+### 0. 一键安装（Windows，推荐新手）
+
+在仓库根目录**双击**：
+
+```text
+一键安装.bat
+```
+
+或运行 `allInOneInstall\一键安装.exe`（若无中文文件名则用 `AllInOneInstall.exe`）。
+
+程序将自动检查并安装 Git、Python 3.12（若需要）、可选 Node.js，再执行 ComfyUI 与金帧助手安装，最后询问是否启动 ComfyUI。  
+安装程序**源码**在独立目录 `jinFrameComfyUIInstall`（不在本仓库）；本仓库仅包含编译好的 exe。
+
 ### 1. 获取本仓库
 
 ```powershell
