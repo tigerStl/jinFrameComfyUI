@@ -39,7 +39,7 @@ Write-Host "Python:    $Py" -ForegroundColor Cyan
 $env:PYTHONPATH = $ComfyRoot
 $env:COMFYUI_ROOT = $ComfyRoot
 
-& $Py -m ensurepip --upgrade 2>$null
+& (Join-Path $PSScriptRoot "bootstrap_python_pip.ps1") -PythonExe $Py
 $req = Join-Path $ComfyRoot "requirements.txt"
 Write-Host "[pip] $req" -ForegroundColor Green
 & $Py -m pip install -r $req

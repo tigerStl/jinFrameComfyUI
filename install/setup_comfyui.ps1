@@ -109,11 +109,8 @@ if (-not $SkipPip) {
     Write-Host "[python] $Py" -ForegroundColor Cyan
     $env:PYTHONPATH = $ComfyRoot
 
-    & $Py -m pip --version 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "[pip] bootstrap (ensurepip)..." -ForegroundColor Yellow
-        & $Py -m ensurepip --upgrade
-    }
+    $bootstrap = Join-Path $PSScriptRoot "bootstrap_python_pip.ps1"
+    & $bootstrap -PythonExe $Py
 
     $reqMain = Join-Path $ComfyRoot "requirements.txt"
     if (Test-Path $reqMain) {
