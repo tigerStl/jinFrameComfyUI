@@ -506,6 +506,7 @@ Use `python main.py --lowvram` when starting ComfyUI.
 
 ---
 
-## License
+## Copyright & license
 
-See [LICENSE.txt](LICENSE.txt).
+- **This repository** (workflow JSON, `install/` scripts, JinFrame Assistant extension, documentation): **Copyright © 2026 Gengfeng Liu / 金帧AI工作室**, licensed under the **[Apache License 2.0](LICENSE)**. Redistributions should include [NOTICE](NOTICE).
+- **Third-party model weights** (FLUX, Wan, LTX, Hunyuan, Kolors, SDXL checkpoints, etc.) are **not** bundled here; each has its own license. LTX terms: [licenses/LTX-2-Community-License.txt](licenses/LTX-2-Community-License.txt). See **[MODELS.md](MODELS.md)** for download and compliance notes.
