@@ -1,5 +1,6 @@
 # Install pip into Python (full install or embeddable). Idempotent.
 # Usage: .\install\bootstrap_python_pip.ps1 -PythonExe "K:\tools\Python312\python.exe"
+# (Run in PowerShell, or let 一键安装.bat invoke it automatically.)
 
 param(
     [Parameter(Mandatory = $true)]
@@ -12,15 +13,17 @@ if (-not (Test-Path $PythonExe)) {
     exit 1
 }
 
-function Invoke-Python {
-    param([string[]]$Args)
-    $p = Start-Process -FilePath $PythonExe -ArgumentList $Args -Wait -PassThru -NoNewWindow
+function Invoke-PythonCli {
+    param([string[]]$PythonArgs)
+    if (-not $PythonArgs -or $PythonArgs.Count -eq 0) {
+        throw "Invoke-PythonCli: empty argument list"
+    }
+    $p = Start-Process -FilePath $PythonExe -ArgumentList $PythonArgs -Wait -PassThru -NoNewWindow
     return $p.ExitCode
 }
 
 function Test-PipOk {
-    $code = Invoke-Python -Args @("-m", "pip", "--version")
-    return $code -eq 0
+    return (Invoke-PythonCli -PythonArgs @("-m", "pip", "--version")) -eq 0
 }
 
 # Enable site-packages for Windows embeddable (must run before pip bootstrap)
@@ -36,15 +39,13 @@ if ($pth) {
 
 if (Test-PipOk) {
     Write-Host "[pip] already installed" -ForegroundColor Green
-    Invoke-Python -Args @("-m", "pip", "--version") | Out-Null
     & $PythonExe -m pip --version
     exit 0
 }
 
 Write-Host "[pip] bootstrapping for $PythonExe" -ForegroundColor Yellow
 
-# ensurepip (may be missing on embeddable — non-fatal)
-$code = Invoke-Python -Args @("-m", "ensurepip", "--upgrade")
+$code = Invoke-PythonCli -PythonArgs @("-m", "ensurepip", "--upgrade")
 if ($code -ne 0) {
     Write-Host "[pip] ensurepip not available (exit $code), trying get-pip.py ..." -ForegroundColor DarkYellow
 }
@@ -64,7 +65,12 @@ try {
     exit 1
 }
 
-$code = Invoke-Python -Args @($getPip, "--no-warn-script-location")
+if (-not (Test-Path $getPip)) {
+    Write-Error "get-pip.py not found after download: $getPip"
+    exit 1
+}
+
+$code = Invoke-PythonCli -PythonArgs @($getPip, "--no-warn-script-location")
 if ($code -ne 0) {
     Write-Error "get-pip.py failed with exit code $code"
     exit 1

@@ -14,6 +14,7 @@ if not exist "%INSTALLER%" (
 )
 
 echo 金帧 AI 视频平台 - 一键安装
+echo 可从 CMD 运行；安装过程会自动调用 PowerShell（Windows 自带）。
 echo.
 "%INSTALLER%" %*
 set ERR=%ERRORLEVEL%
