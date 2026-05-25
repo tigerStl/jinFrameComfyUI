@@ -42,7 +42,9 @@ $env:COMFYUI_ROOT = $ComfyRoot
 & (Join-Path $PSScriptRoot "bootstrap_python_pip.ps1") -PythonExe $Py
 $req = Join-Path $ComfyRoot "requirements.txt"
 Write-Host "[pip] $req" -ForegroundColor Green
-& $Py -m pip install -r $req
+& $Py -m pip install -r $req --upgrade-strategy only-if-needed --progress-bar on
+& (Join-Path $PSScriptRoot "install_pytorch_cuda.ps1") -PythonExe $Py
+if ($LASTEXITCODE -ne 0) { throw "install_pytorch_cuda failed" }
 
 # Refresh launch bat via one-click installer or manual PYTHONPATH line
 $bat = Join-Path $ComfyRoot "启动ComfyUI.bat"

@@ -13,7 +13,7 @@ param(
 $ErrorActionPreference = "Stop"
 $script:PhaseStart = Get-Date
 $script:StepIndex = 0
-$script:StepTotal = 6
+$script:StepTotal = 7
 
 function Write-Log {
     param([string]$Message, [string]$Color = "White")
@@ -221,6 +221,12 @@ if (-not $SkipPip) {
             }
             Write-Log "ComfyUI requirements.txt done" "Green"
         }
+    }
+
+    Write-Phase "PyTorch CUDA (GPU)"
+    & (Join-Path $PSScriptRoot "install_pytorch_cuda.ps1") -PythonExe $Py
+    if ($LASTEXITCODE -ne 0) {
+        throw "PyTorch CUDA setup failed. ComfyUI needs NVIDIA GPU build of torch, not CPU-only."
     }
 
     $pipNodes = @($Lock.custom_nodes | Where-Object { $_.pip_requirements })
