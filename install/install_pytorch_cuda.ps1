@@ -38,7 +38,7 @@ function Ensure-GpuProfile {
         & (Join-Path $PSScriptRoot "detect_nvidia_gpu.ps1") -RepoRoot $RepoRoot -OutFile $ProfileFile
     }
     if (-not (Test-Path $ProfileFile)) {
-        throw "Missing $ProfileFile — run detect_nvidia_gpu.ps1 first"
+        throw "Missing $ProfileFile - run detect_nvidia_gpu.ps1 first"
     }
 }
 
@@ -66,18 +66,11 @@ function Get-ProfileObject {
 }
 
 function Test-TorchCudaOk {
-    $probe = Join-Path $env:TEMP "jinframe_probe_torch_cuda.py"
-    @"
-import torch
-if not torch.cuda.is_available():
-    raise SystemExit(1)
-if not getattr(torch.version, "cuda", None):
-    raise SystemExit(2)
-print("torch", torch.__version__, "cuda", torch.version.cuda)
-print("device", torch.cuda.get_device_name(0))
-"@ | Set-Content -Path $probe -Encoding UTF8
+    $probe = Join-Path $PSScriptRoot "probe_torch_cuda.py"
+    if (-not (Test-Path $probe)) {
+        throw "Missing probe_torch_cuda.py under install/"
+    }
     $code = Invoke-Py -PyArgs @($probe)
-    Remove-Item $probe -Force -ErrorAction SilentlyContinue
     return $code -eq 0
 }
 
@@ -90,7 +83,7 @@ function Install-TorchFromIndex {
     if ($Nightly) { $pipArgs += "--pre" }
     $pipArgs += @("torch", "torchvision", "torchaudio", "--index-url", $IndexUrl)
 
-    Write-Log ("pip install torch from index (10-30 min possible) ...") "Cyan"
+    Write-Log "pip install torch from index (10-30 min possible) ..." "Cyan"
     & $PythonExe @pipArgs
     return ($LASTEXITCODE -eq 0)
 }
@@ -100,11 +93,11 @@ Write-Log "Python: $PythonExe"
 
 $gpu = Get-ProfileObject
 Write-Log "GPU: $($gpu.gpu_name)" "Cyan"
-Write-Log "Plan: $($gpu.torch_profile) — $($gpu.reason)" "DarkGray"
+Write-Log "Plan: $($gpu.torch_profile) | $($gpu.reason)" "DarkGray"
 
 if ($gpu.torch_profile -eq "cpu") {
     Write-Log "CPU mode: keep PyTorch from requirements.txt (no CUDA wheels)." "Yellow"
-    Write-Log "ComfyUI will use --cpu; GPU workflows will not work until NVIDIA driver is installed." "Yellow"
+    Write-Log "ComfyUI will use --cpu; install NVIDIA driver for GPU workflows." "Yellow"
     exit 0
 }
 
@@ -122,7 +115,6 @@ if ($ok -and (Test-TorchCudaOk)) {
     exit 0
 }
 
-# Fallback: opposite mainstream index (50xx nightly <-> cu124)
 if ($gpu.torch_profile -eq "cu128_nightly") {
     Write-Log "cu128 nightly failed verify; trying cu124 ..." "DarkYellow"
     if ((Install-TorchFromIndex -IndexUrl "https://download.pytorch.org/whl/cu124" -Nightly:$false) -and (Test-TorchCudaOk)) {
@@ -146,8 +138,8 @@ Write-Error @"
 PyTorch CUDA install failed for $($gpu.gpu_name).
 Profile tried: $($gpu.torch_profile)
 Verify driver: nvidia-smi
-Manual (RTX 3060 / 40系):
+Manual (RTX 3060 / 40 series):
   "$PythonExe" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-Manual (RTX 5060 / 50系):
+Manual (RTX 5060 / 50 series):
   "$PythonExe" -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
 "@

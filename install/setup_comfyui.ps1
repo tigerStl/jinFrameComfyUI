@@ -189,10 +189,10 @@ Write-Phase "Verify ComfyUI source"
 $comfyPkg = Join-Path $ComfyRoot "comfy"
 if (-not (Test-Path (Join-Path $comfyPkg "options.py"))) {
     throw @"
-ComfyUI 源码不完整：未找到 $comfyPkg\options.py
-请确认 Git 已安装且网络可访问 GitHub，然后重新运行：
+ComfyUI source incomplete: missing $comfyPkg\options.py
+Ensure Git is installed and GitHub is reachable, then re-run:
   .\install\setup_comfyui.ps1 -ComfyRoot "$ComfyRoot"
-若目录曾有残缺文件，可先删除整个 $ComfyRoot 后重试。
+If the folder is corrupt, delete $ComfyRoot and run again.
 "@
 }
 Write-Log "comfy\options.py OK" "Green"

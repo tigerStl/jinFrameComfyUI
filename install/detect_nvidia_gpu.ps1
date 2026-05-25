@@ -1,5 +1,5 @@
 # Detect NVIDIA GPU and choose PyTorch install profile for this machine.
-# Writes jinframe_gpu_profile.json next to repo root (caller sets -OutFile).
+# Writes jinframe_gpu_profile.json next to repo root.
 # Usage:
 #   .\install\detect_nvidia_gpu.ps1 -RepoRoot "K:\tiger\jinFrame\jinFrameComfyUI"
 
@@ -40,7 +40,7 @@ $profile = @{
 
 $nvidiaSmi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
 if (-not $nvidiaSmi) {
-    $profile.reason = "未找到 nvidia-smi：无 NVIDIA 驱动或纯 CPU 环境，将使用 CPU 版 PyTorch（ComfyUI 极慢或无法 GPU 加速）。"
+    $profile.reason = "nvidia-smi not found; no NVIDIA driver or CPU-only host. Using CPU PyTorch."
     $profile | ConvertTo-Json -Depth 4 | Set-Content -Path $OutFile -Encoding UTF8
     Write-Host "[gpu] NO NVIDIA (nvidia-smi missing) -> CPU mode" -ForegroundColor Yellow
     exit 0
@@ -55,7 +55,7 @@ try {
 }
 
 if ([string]::IsNullOrWhiteSpace($nameLine)) {
-    $profile.reason = "nvidia-smi 无输出，无法识别显卡。"
+    $profile.reason = "nvidia-smi returned no GPU name."
     $profile | ConvertTo-Json -Depth 4 | Set-Content -Path $OutFile -Encoding UTF8
     Write-Host "[gpu] nvidia-smi failed -> CPU mode" -ForegroundColor Yellow
     exit 0
@@ -70,13 +70,13 @@ if (Test-Rtx50Series -Name $nameLine) {
     $profile.torch_index_url = "https://download.pytorch.org/whl/nightly/cu128"
     $profile.torch_nightly = $true
     $profile.comfy_launch_extra = "--lowvram"
-    $profile.reason = "检测到 RTX 50 系 / Blackwell（sm_120），使用 PyTorch cu128 nightly。"
+    $profile.reason = "RTX 50 series / Blackwell (sm_120): PyTorch cu128 nightly."
 } else {
     $profile.torch_profile = "cu124"
     $profile.torch_index_url = "https://download.pytorch.org/whl/cu124"
     $profile.torch_nightly = $false
     $profile.comfy_launch_extra = "--lowvram"
-    $profile.reason = "检测到 NVIDIA 显卡（如 RTX 3060/40 系），使用 PyTorch CUDA 12.4 稳定版 cu124。"
+    $profile.reason = "NVIDIA GPU (e.g. RTX 3060/40 series): PyTorch CUDA 12.4 stable cu124."
 }
 
 $profile | ConvertTo-Json -Depth 4 | Set-Content -Path $OutFile -Encoding UTF8
