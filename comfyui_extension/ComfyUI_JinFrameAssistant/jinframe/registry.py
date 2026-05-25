@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import threading
 import urllib.request
 from pathlib import Path
@@ -12,6 +13,16 @@ from typing import Any
 _MANIFEST_PATH = Path(__file__).resolve().parent.parent / "models_manifest.json"
 _DOWNLOAD_LOCK = threading.Lock()
 _DOWNLOAD_STATE: dict[str, Any] = {"active": False, "items": {}, "error": None}
+
+
+def _install_dir() -> Path:
+    return repo_root() / "install"
+
+
+def _ensure_lock_import() -> None:
+    inst = _install_dir()
+    if str(inst) not in sys.path:
+        sys.path.insert(0, str(inst))
 
 
 def comfy_models_root() -> Path:
@@ -23,22 +34,55 @@ def repo_root() -> Path:
     if os.environ.get("JINFRAME_REPO_ROOT"):
         return Path(os.environ["JINFRAME_REPO_ROOT"]).resolve()
     ext = Path(__file__).resolve().parent.parent
-    for candidate in (
-        Path(r"c:\tiger\videoModel\jinFrameComfyUI"),
-        ext.parent.parent,
-        ext,
-    ):
-        if (candidate / "workflows").is_dir():
+    for candidate in (ext.parent.parent, ext):
+        if (candidate / "workflows").is_dir() or (candidate / "MODELS.lock.json").is_file():
             return candidate.resolve()
     return ext.resolve()
 
 
-def _load_manifest() -> dict:
-    with _MANIFEST_PATH.open(encoding="utf-8") as f:
+def _lock_path() -> Path:
+    return repo_root() / "MODELS.lock.json"
+
+
+def _load_lock() -> dict | None:
+    p = _lock_path()
+    if not p.is_file():
+        return None
+    with p.open(encoding="utf-8") as f:
         return json.load(f)
 
 
-def _file_ok(path: Path, min_mb: float) -> bool:
+def _load_manifest() -> dict:
+    with _MANIFEST_PATH.open(encoding="utf-8") as f:
+        manifest = json.load(f)
+    lock = _load_lock()
+    if not lock:
+        return manifest
+    _ensure_lock_import()
+    from models_lock import merge_manifest_with_lock  # noqa: WPS433
+
+    return merge_manifest_with_lock(manifest, lock)
+
+
+def _lock_entry(file_id: str) -> dict | None:
+    lock = _load_lock()
+    if not lock:
+        return None
+    for entry in lock.get("files", []):
+        if entry.get("id") == file_id:
+            return entry
+    return None
+
+
+def _file_ok(path: Path, finfo: dict) -> bool:
+    le = _lock_entry(finfo.get("id", ""))
+    if le and le.get("sha256"):
+        _ensure_lock_import()
+        from models_lock import verify_file  # noqa: WPS433
+
+        ok, _ = verify_file(path, le)
+        return ok
+    min_mb = float(finfo.get("min_mb", 1))
     if not path.is_file():
         return False
     return path.stat().st_size >= int(min_mb * 1024 * 1024 * 0.85)
@@ -49,11 +93,10 @@ def _resolve_file(pack_id: str, finfo: dict) -> tuple[Path, bool]:
     rel = finfo.get("dir", "")
     name = finfo["name"]
     path = models / rel / name if rel else models / name
-    min_mb = float(finfo.get("min_mb", 1))
-    ok = _file_ok(path, min_mb)
+    ok = _file_ok(path, finfo)
     if not ok and pack_id == "ltx_cloud" and finfo["id"] == "ltx_distill_lora":
         repo_lora = repo_root() / "distill_loras" / name
-        if _file_ok(repo_lora, min_mb):
+        if _file_ok(repo_lora, finfo):
             ok = True
             path = repo_lora
     return path, ok
@@ -67,17 +110,19 @@ def scan_packs() -> list[dict]:
         missing = 0
         for finfo in pack.get("files", []):
             path, ok = _resolve_file(pack["id"], finfo)
-            if not ok and not finfo.get("url"):
-                if finfo["id"] == "ltx_distill_lora":
-                    repo_lora = repo_root() / "distill_loras" / finfo["name"]
-                    if repo_lora.is_file():
-                        ok = True
+            if not ok and finfo["id"] == "ltx_distill_lora":
+                repo_lora = repo_root() / "distill_loras" / finfo["name"]
+                if repo_lora.is_file():
+                    ok = True
+            le = _lock_entry(finfo.get("id", ""))
             files.append(
                 {
                     "id": finfo["id"],
                     "name": finfo["name"],
                     "installed": ok,
                     "size_gb": round(path.stat().st_size / 1e9, 2) if ok and path.is_file() else None,
+                    "revision": (le or {}).get("revision"),
+                    "locked": bool(le and le.get("sha256")),
                 }
             )
             if not ok:
@@ -118,6 +163,18 @@ def _download_one(url: str, dest: Path, item_id: str) -> None:
     _DOWNLOAD_STATE["items"][item_id] = {"pct": 100, "done": True}
 
 
+def _verify_after_download(dest: Path, finfo: dict) -> None:
+    le = _lock_entry(finfo.get("id", ""))
+    if not le or not le.get("sha256"):
+        return
+    _ensure_lock_import()
+    from models_lock import verify_file  # noqa: WPS433
+
+    ok, msg = verify_file(dest, le)
+    if not ok:
+        raise RuntimeError(f"SHA256 verify failed for {finfo['id']}: {msg}")
+
+
 def _run_downloads(file_ids: list[str]) -> None:
     global _DOWNLOAD_STATE
     data = _load_manifest()
@@ -131,7 +188,8 @@ def _run_downloads(file_ids: list[str]) -> None:
             if fid not in id_to_file:
                 continue
             pack, finfo = id_to_file[fid]
-            url = finfo.get("url") or ""
+            le = _lock_entry(fid)
+            url = (le or {}).get("url") or finfo.get("url") or ""
             if not url:
                 if fid == "ltx_distill_lora":
                     src = repo_root() / "distill_loras" / finfo["name"]
@@ -140,15 +198,16 @@ def _run_downloads(file_ids: list[str]) -> None:
                         dst.parent.mkdir(parents=True, exist_ok=True)
                         if not dst.exists():
                             shutil.copy2(src, dst)
+                        _verify_after_download(dst, finfo)
                         _DOWNLOAD_STATE["items"][fid] = {"pct": 100, "done": True}
                 continue
-            path, ok = _resolve_file(pack["id"], finfo)
             dest = comfy_models_root() / finfo["dir"] / finfo["name"]
-            if ok and _file_ok(dest, finfo.get("min_mb", 1)):
+            if _file_ok(dest, finfo):
                 _DOWNLOAD_STATE["items"][fid] = {"pct": 100, "skipped": True}
                 continue
             _DOWNLOAD_STATE["items"][fid] = {"pct": 0}
             _download_one(url, dest, fid)
+            _verify_after_download(dest, finfo)
     except Exception as e:
         _DOWNLOAD_STATE["error"] = str(e)
     finally:
