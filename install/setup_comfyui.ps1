@@ -87,9 +87,19 @@ function Ensure-GitRepo {
     Write-Host "[git] clone $Label" -ForegroundColor Green
     if ($Tag) {
         git clone --depth 1 --branch $Tag $Url $Path
+        if ($LASTEXITCODE -ne 0) { throw "git clone failed: $Label" }
     } else {
-        git clone --depth 1 $Url $Path
+        # Full clone required for arbitrary pinned commits (shallow clone breaks checkout on some repos)
+        git clone $Url $Path
+        if ($LASTEXITCODE -ne 0) { throw "git clone failed: $Label" }
         git -C $Path checkout -f $Revision
+        if ($LASTEXITCODE -ne 0) {
+            Remove-Item $Path -Recurse -Force -ErrorAction SilentlyContinue
+            throw "git checkout $Revision failed for $Label (removed broken folder). Re-run setup."
+        }
+    }
+    if (-not (Test-AtRevision -Path $Path -Revision $Revision)) {
+        throw "git verify failed: $Label is not at $($Revision.Substring(0,12))"
     }
 }
 
@@ -126,11 +136,19 @@ function Resolve-PythonForComfy {
     return "python"
 }
 
-function Test-ComfyUIPythonDeps {
+function Test-ComfyCanImport {
     param([string]$Py, [string]$ComfyRoot)
+    if (-not (Test-Path (Join-Path $ComfyRoot "comfy\options.py"))) { return $false }
     $env:PYTHONPATH = $ComfyRoot
-    $code = "import sys; sys.path.insert(0, r'$($ComfyRoot -replace "'", "''")'); import comfy; import torch"
-    $p = Start-Process -FilePath $Py -ArgumentList @("-c", $code) -Wait -PassThru -NoNewWindow
+    $root = ($ComfyRoot -replace '\\', '/')
+    $probe = Join-Path $env:TEMP "jinframe_probe_comfy.py"
+    @"
+import sys
+sys.path.insert(0, r'$root')
+import comfy
+"@ | Set-Content -Path $probe -Encoding UTF8
+    $p = Start-Process -FilePath $Py -ArgumentList @($probe) -Wait -PassThru -NoNewWindow
+    Remove-Item $probe -Force -ErrorAction SilentlyContinue
     return $p.ExitCode -eq 0
 }
 
@@ -154,8 +172,8 @@ if (-not $SkipPip) {
     $bootstrap = Join-Path $PSScriptRoot "bootstrap_python_pip.ps1"
     & $bootstrap -PythonExe $Py
 
-    if ((-not $Force) -and (Test-ComfyUIPythonDeps -Py $Py -ComfyRoot $ComfyRoot)) {
-        Write-Host "[pip] skip ComfyUI requirements.txt (comfy + torch already importable)" -ForegroundColor DarkGray
+    if ((-not $Force) -and (Test-ComfyCanImport -Py $Py -ComfyRoot $ComfyRoot)) {
+        Write-Host "[pip] skip ComfyUI requirements.txt (comfy import OK; use -Force to reinstall)" -ForegroundColor DarkGray
     } else {
         $reqMain = Join-Path $ComfyRoot "requirements.txt"
         if (Test-Path $reqMain) {

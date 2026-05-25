@@ -110,11 +110,7 @@ python install\\build_ltx23_cloud_workflows.py
 
 def _patch_api_workflow(data: dict, *, save_prefix: str) -> dict:
     data = copy.deepcopy(data)
-    if "nodes" in data:
-        from sanitize_workflow_prompts import sanitize_canvas_workflow
-
-        sanitize_canvas_workflow(data)
-    for node in data.values() if "nodes" not in data else []:
+    for node in data.values():
         if not isinstance(node, dict):
             continue
         inp = node.get("inputs")
