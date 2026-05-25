@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="jinZhenLogo.png" alt="Golden Frame AI Video Platform" width="280" />
+</p>
+
 # Golden Frame AI Video Platform · ComfyUI
 
 **Golden Frame AI Video Platform** is an **image + video** production stack for ComfyUI: ready-to-run standard workflows, one-click model downloads, workflow sync and safety tooling, and the built-in **JinFrame Assistant** panel so you can download models, open workflows, and edit flows from chat without living in PowerShell.
