@@ -27,7 +27,7 @@ function Write-Phase {
     $elapsed = (Get-Date) - $script:PhaseStart
     $elStr = "{0:mm\:ss}" -f $elapsed
     Write-Host ""
-    Write-Log "==== [$script:StepIndex/$script:StepTotal] $Title (累计 $elStr) ====" "Cyan"
+    Write-Log "==== [$script:StepIndex/$script:StepTotal] $Title | elapsed $elStr ====" "Cyan"
 }
 
 function Invoke-Git {
@@ -117,7 +117,7 @@ function Ensure-GitRepo {
         Remove-Item $Path -Recurse -Force
     }
 
-    Write-Log "[git] clone $Label (network speed varies) ..." "Green"
+    Write-Log "[git] clone $Label - network speed varies ..." "Green"
     if ($Tag) {
         Invoke-Git -GitArgs @("clone", "--progress", "--depth", "1", "--branch", $Tag, $Url, $Path)
     } else {
@@ -209,12 +209,12 @@ if (-not $SkipPip) {
     & $bootstrap -PythonExe $Py
 
     if ((-not $Force) -and (Test-ComfyCanImport -Py $Py -ComfyRoot $ComfyRoot)) {
-        Write-Log "skip ComfyUI requirements.txt (comfy import OK)" "DarkGray"
+        Write-Log "skip ComfyUI requirements.txt - comfy import OK" "DarkGray"
     } else {
         $reqMain = Join-Path $ComfyRoot "requirements.txt"
         if (Test-Path $reqMain) {
-            Write-Log "pip install ComfyUI requirements.txt — FIRST RUN often 15-45 min, please wait" "Yellow"
-            Write-Log "You should see download lines below (Collecting..., Downloading...)" "DarkGray"
+            Write-Log "pip install ComfyUI requirements.txt - FIRST RUN often 15-45 min, please wait" "Yellow"
+            Write-Log 'You should see download lines below: Collecting / Downloading' "DarkGray"
             & $Py -m pip install -r $reqMain --upgrade-strategy only-if-needed --progress-bar on
             if ($LASTEXITCODE -ne 0) {
                 throw "pip install ComfyUI requirements failed. Try: `"$Py`" -m pip install -r `"$reqMain`""
@@ -245,4 +245,5 @@ $total = (Get-Date) - $script:PhaseStart
 Write-Host ""
 Write-Log ("ComfyUI setup done. Total {0:mm\:ss}" -f $total) "Green"
 Write-Log "Next: install_jinframe_assistant.ps1, sync_to_comfyui.ps1, MODELS.md" "Cyan"
-Write-Log "Start: $ComfyRoot\启动ComfyUI.bat" "Cyan"
+$launchBat = Join-Path $ComfyRoot "启动ComfyUI.bat"
+Write-Log "Start: $launchBat" "Cyan"
