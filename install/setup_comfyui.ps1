@@ -187,8 +187,10 @@ import comfy
 
 function Test-TorchCanImport {
     param([string]$Py)
+    $probe = Join-Path $PSScriptRoot "probe_import_torch.py"
+    if (-not (Test-Path $probe)) { return $false }
     Write-Log "probe import torch ..." "DarkGray"
-    $p = Start-Process -FilePath $Py -ArgumentList @("-c", "import torch") -Wait -PassThru -NoNewWindow
+    $p = Start-Process -FilePath $Py -ArgumentList @($probe) -Wait -PassThru -NoNewWindow
     return $p.ExitCode -eq 0
 }
 

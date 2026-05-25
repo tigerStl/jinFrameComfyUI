@@ -25,27 +25,17 @@ function Write-Log([string]$Msg, [string]$Color = "White") {
 }
 
 function Invoke-Py {
-    param([string[]]$PyArgs)
-    $p = Start-Process -FilePath $PythonExe -ArgumentList $PyArgs -Wait -PassThru -NoNewWindow
+    param([string]$ScriptPath)
+    $p = Start-Process -FilePath $PythonExe -ArgumentList @($ScriptPath) -Wait -PassThru -NoNewWindow
     return $p.ExitCode
 }
 
 function Invoke-Pip {
-    param([string[]]$PipArgs, [switch]$Quiet)
+    param([string[]]$PipArgs)
     $allArgs = @("-m", "pip") + $PipArgs
     $prevEa = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        if ($Quiet) {
-            $out = Join-Path $env:TEMP ("jinframe_pip_{0}.log" -f [Guid]::NewGuid().ToString("N"))
-            $p = Start-Process -FilePath $PythonExe -ArgumentList $allArgs -Wait -PassThru -NoNewWindow `
-                -RedirectStandardOutput $out -RedirectStandardError $out
-            if (Test-Path $out) {
-                Get-Content $out -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    $_" }
-                Remove-Item $out -Force -ErrorAction SilentlyContinue
-            }
-            return $p.ExitCode
-        }
         $p = Start-Process -FilePath $PythonExe -ArgumentList $allArgs -Wait -PassThru -NoNewWindow
         return $p.ExitCode
     } finally {
@@ -54,7 +44,11 @@ function Invoke-Pip {
 }
 
 function Test-TorchInstalled {
-    return (Invoke-Py -PyArgs @("-c", "import torch")) -eq 0
+    $probe = Join-Path $PSScriptRoot "probe_import_torch.py"
+    if (-not (Test-Path $probe)) {
+        throw "Missing probe_import_torch.py under install/"
+    }
+    return (Invoke-Py -ScriptPath $probe) -eq 0
 }
 
 function Ensure-GpuProfile {
@@ -100,16 +94,16 @@ function Test-TorchCudaOk {
     if (-not (Test-Path $probe)) {
         throw "Missing probe_torch_cuda.py under install/"
     }
-    $code = Invoke-Py -PyArgs @($probe)
+    $code = Invoke-Py -ScriptPath $probe
     return $code -eq 0
 }
 
 function Install-TorchFromIndex {
     param([string]$IndexUrl, [bool]$Nightly)
     Write-Log "pip uninstall torch / torchvision / torchaudio ..." "Yellow"
-    Invoke-Pip -PipArgs @("uninstall", "-y", "torch", "torchvision", "torchaudio") -Quiet | Out-Null
+    Invoke-Pip -PipArgs @("uninstall", "-y", "torch", "torchvision", "torchaudio") | Out-Null
 
-    $pipArgs = @("install", "--no-cache-dir")
+    $pipArgs = @("install", "--no-cache-dir", "--force-reinstall")
     if ($Nightly) { $pipArgs += "--pre" }
     $pipArgs += @("torch", "torchvision", "torchaudio", "--index-url", $IndexUrl)
 
@@ -133,12 +127,14 @@ if ($gpu.torch_profile -eq "cpu") {
 
 if (Test-TorchCudaOk) {
     Write-Log "PyTorch CUDA already OK for this machine" "Green"
-    Invoke-Py -PyArgs @("-c", "import torch; print(torch.cuda.get_device_name(0))") | Out-Null
+    Invoke-Py -ScriptPath (Join-Path $PSScriptRoot "probe_torch_cuda.py") | Out-Null
     exit 0
 }
 
 if (-not (Test-TorchInstalled)) {
     Write-Log "torch not installed yet; installing CUDA wheels ..." "DarkGray"
+} else {
+    Write-Log "torch present but CUDA not OK (likely CPU build); reinstalling CUDA wheels ..." "Yellow"
 }
 Write-Log "Installing PyTorch for profile: $($gpu.torch_profile)" "Yellow"
 
@@ -172,7 +168,7 @@ PyTorch CUDA install failed for $($gpu.gpu_name).
 Profile tried: $($gpu.torch_profile)
 Verify driver: nvidia-smi
 Manual (RTX 3060 / 40 series):
-  "$PythonExe" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+  "$PythonExe" -m pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 Manual (RTX 5060 / 50 series):
-  "$PythonExe" -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+  "$PythonExe" -m pip install --pre --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
 "@
