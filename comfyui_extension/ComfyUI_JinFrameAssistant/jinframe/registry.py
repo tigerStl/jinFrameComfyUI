@@ -172,7 +172,18 @@ def _verify_after_download(dest: Path, finfo: dict) -> None:
 
     ok, msg = verify_file(dest, le)
     if not ok:
-        raise RuntimeError(f"SHA256 verify failed for {finfo['id']}: {msg}")
+        try:
+            if dest.is_file():
+                dest.unlink()
+            part = dest.with_suffix(dest.suffix + ".part")
+            if part.is_file():
+                part.unlink()
+        except OSError:
+            pass
+        hint = ""
+        if "size mismatch" in msg and finfo.get("id") == "flux_dev_fp8":
+            hint = " Run: git pull (updates MODELS.lock.json for ~17GB FLUX fp8), then download again."
+        raise RuntimeError(f"SHA256 verify failed for {finfo['id']}: {msg}.{hint}")
 
 
 def _run_downloads(file_ids: list[str]) -> None:

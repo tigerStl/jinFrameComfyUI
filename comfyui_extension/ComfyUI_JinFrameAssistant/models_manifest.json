@@ -10,8 +10,8 @@
           "id": "flux_dev_fp8",
           "name": "flux1-dev-fp8.safetensors",
           "dir": "diffusion_models",
-          "min_mb": 10000,
-          "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors"
+          "min_mb": 16000,
+          "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/0f6b956e6e2e041fb73d079b72ec0e761506f601/flux1-dev-fp8.safetensors"
         },
         {
           "id": "clip_l",

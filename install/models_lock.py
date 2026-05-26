@@ -62,17 +62,28 @@ def sha256_file(path: Path, chunk_mb: int = 8) -> str:
 def verify_file(path: Path, entry: dict) -> tuple[bool, str]:
     if not path.is_file():
         return False, "missing"
-    expected_size = entry.get("size_bytes")
-    if expected_size and path.stat().st_size != expected_size:
-        return False, f"size mismatch (have {path.stat().st_size}, want {expected_size})"
+    size = path.stat().st_size
     expected_sha = (entry.get("sha256") or "").lower()
+    alt_sha = (entry.get("sha256_mismatch_hf") or "").lower()
+
     if expected_sha:
         actual = sha256_file(path)
-        if actual != expected_sha:
-            return False, f"sha256 mismatch"
-    elif entry.get("min_mb"):
+        if actual == expected_sha:
+            return True, "ok"
+        if alt_sha and actual == alt_sha:
+            return True, "ok (hf-updated blob)"
+        if expected_sha and actual != expected_sha:
+            return False, "sha256 mismatch"
+
+    expected_size = entry.get("size_bytes")
+    if expected_size and size != expected_size:
+        if expected_sha:
+            return False, f"size mismatch (have {size}, want {expected_size}); sha256 also failed"
+        return False, f"size mismatch (have {size}, want {expected_size})"
+
+    if entry.get("min_mb"):
         min_bytes = int(float(entry["min_mb"]) * 1024 * 1024 * 0.85)
-        if path.stat().st_size < min_bytes:
+        if size < min_bytes:
             return False, "smaller than min_mb threshold"
     return True, "ok"
 
