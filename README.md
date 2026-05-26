@@ -131,7 +131,7 @@ allInOneInstall\AllInOneInstall.exe --install-root=D:
 ```
 
 程序将自动检查并安装 Git、Python、可选 Node.js，再安装 ComfyUI 与金帧助手，最后询问是否启动。  
-**NVIDIA 显卡**会先检测型号再安装对应 **CUDA 版 PyTorch**（RTX 3060/40 系 → cu124；RTX 5060/50 系 → cu128 nightly；无显卡 → CPU 模式）。
+**NVIDIA 显卡**会先检测型号再安装对应 **CUDA 版 PyTorch**（RTX 3050/30/40 系 → **cu130**；RTX 5060/50 系 → **cu128 nightly**；无显卡 → CPU 模式）。启动参数含 `--lowvram --disable-cuda-malloc`。
 
 安装结束后，在 ComfyUI 目录生成 **`启动ComfyUI.bat`**（例如 `D:\ComfyUI\ComfyUI\启动ComfyUI.bat`），并写入用户环境变量 `COMFYUI_ROOT`、`JINFRAME_REPO_ROOT` 及工具盘 Python/Git 的 PATH。**日常请双击该 bat 启动**，不要依赖安装程序窗口内的 Python。
 
@@ -585,6 +585,35 @@ python main.py --lowvram
 | RTX 50 系（如 5060） | 若 LTX 报 attention 错误，运行 `patch_ltx2_sm_pytorch_attention.py` |
 
 启动 ComfyUI 时可加 `--lowvram` 以降低显存占用。
+
+### 从头完整测试（3050 / 5060）
+
+在测试机上 **先 `git pull`**，确认 `nvidia-smi` 正常（若显示 **GPU is lost** 必须先重启）。
+
+```powershell
+cd K:\tiger\jinFrame\jinFrameComfyUI
+.\install\full_retest.ps1 -ComfyRoot "K:\ComfyUI\ComfyUI"
+```
+
+仅修复 CUDA / 启动脚本（不重装 ComfyUI）：
+
+```powershell
+.\install\full_retest.ps1 -ComfyRoot "K:\ComfyUI\ComfyUI" -SkipSetup -Force
+```
+
+或：
+
+```powershell
+.\install\repair_comfyui_cuda.ps1 -ComfyRoot "K:\ComfyUI\ComfyUI"
+```
+
+验证：`python -c "import torch; print(torch.__version__)"`  
+- RTX **3050**：应为 **`2.10.0+cu130`**（不能是 `+cu128`）  
+- RTX **5060**：应为 **`+cu128`** nightly  
+
+然后双击 **`启动ComfyUI.bat`**（内含 CUDA 预检）。**不要**单独执行 `pip install -r requirements.txt`，会覆盖 CUDA 版 torch。
+
+若已装上 `2.10.0+cu130` 但报 `cudaErrorNotSupported` / `torch.cuda.is_available() is False`：**不是 wheel 装错**，而是 **NVIDIA 驱动过旧**（cu130 需要 **驱动 580.0+**）。请到 [NVIDIA 驱动下载](https://www.nvidia.com/Download/index.aspx) 升级后**重启**，再运行 `.\install\repair_comfyui_cuda.ps1`（无需再 pip 重装 torch）。
 
 ---
 

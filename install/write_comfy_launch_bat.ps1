@@ -32,6 +32,17 @@ if (-not (Test-Path $Py)) {
 }
 
 $launchArgs = "--lowvram --disable-cuda-malloc"
+if (Test-Path (Join-Path $PSScriptRoot "gpu_common.ps1")) {
+    . (Join-Path $PSScriptRoot "gpu_common.ps1")
+    $smi = Get-SmiGpuInfo
+    if ($smi.ok -and (Test-Path $profilePath)) {
+        $prof = Get-Content $profilePath -Raw | ConvertFrom-Json
+        if (-not (Test-ProfileMatchesGpu $prof $smi.name)) {
+            Write-Host "GPU profile stale; re-detecting ..." -ForegroundColor Yellow
+            & (Join-Path $PSScriptRoot "detect_nvidia_gpu.ps1") -RepoRoot $RepoRoot -OutFile $profilePath
+        }
+    }
+}
 if (Test-Path $profilePath) {
     $prof = Get-Content $profilePath -Raw | ConvertFrom-Json
     if ($prof.comfy_launch_extra) { $launchArgs = $prof.comfy_launch_extra.Trim() }

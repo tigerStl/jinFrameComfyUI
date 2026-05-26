@@ -4,6 +4,8 @@ param(
     [string]$RepoRoot = ""
 )
 
+. (Join-Path $PSScriptRoot "gpu_common.ps1")
+
 if (-not $RepoRoot) { $RepoRoot = Split-Path $PSScriptRoot -Parent }
 $RepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
 
@@ -35,6 +37,12 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
         Write-Host "Remote Desktop is OK; GPU must be healthy in nvidia-smi first." -ForegroundColor DarkGray
     } elseif ($LASTEXITCODE -eq 0 -and $smiOut -match "RTX|GeForce|NVIDIA") {
         $smiOk = $true
+        $drv = (& nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>$null | Select-Object -First 1).Trim()
+        if ($drv -and -not (Test-DriverForTorchProfile $drv "cu130")) {
+            Write-Host ""
+            Write-Host "[WARN] Driver $drv is below 580.0 - PyTorch cu130 will show cudaErrorNotSupported." -ForegroundColor Red
+            Write-Host "       Update NVIDIA driver, reboot, then repair_comfyui_cuda.ps1" -ForegroundColor Yellow
+        }
     }
 } else {
     Write-Host "nvidia-smi NOT FOUND" -ForegroundColor Red

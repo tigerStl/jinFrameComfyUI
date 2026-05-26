@@ -288,5 +288,11 @@ $total = (Get-Date) - $script:PhaseStart
 Write-Host ""
 Write-Log ("ComfyUI setup done. Total {0:mm\:ss}" -f $total) "Green"
 Write-Log "Next: sync_to_comfyui.ps1, MODELS.md; open ComfyUI and click the blue chat button" "Cyan"
+$writeBat = Join-Path $PSScriptRoot "write_comfy_launch_bat.ps1"
+if (Test-Path $writeBat) {
+    & $writeBat -ComfyRoot $ComfyRoot -RepoRoot $RepoRoot
+}
+
 $launchBat = Join-Path $ComfyRoot "启动ComfyUI.bat"
 Write-Log "Start: $launchBat" "Cyan"
+Write-Log "Full retest: .\install\full_retest.ps1 -ComfyRoot `"$ComfyRoot`"" "DarkGray"

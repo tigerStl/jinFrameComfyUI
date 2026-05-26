@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import warnings
 from pathlib import Path
 
 try:
@@ -36,20 +37,60 @@ def _cuda_build_major() -> int:
         return 0
 
 
+def _probe_cuda_runtime(tag: str) -> int:
+    """Return exit code when cuda.is_available() is False (1 generic, 6 driver/runtime)."""
+    msg_parts: list[str] = []
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            torch.cuda.device_count()
+        except Exception as exc:
+            msg_parts.append(str(exc))
+
+    blob = " ".join(msg_parts) + " ".join(str(w.message) for w in caught)
+    lower = blob.lower()
+    if "cudaerrornotsupported" in lower or "older driver" in lower:
+        print("torch", tag, "- CUDA runtime not supported by current NVIDIA driver.")
+        if "+cu130" in tag:
+            print("FIX: Update GeForce driver to 580.0 or newer, reboot, then re-run repair_comfyui_cuda.ps1")
+            print("     (cu130 wheel is correct; do NOT downgrade to cu128 on RTX 3050.)")
+        else:
+            print("FIX: Update NVIDIA driver, reboot, then re-run install_pytorch_cuda.ps1 -Force")
+        return 6
+
+    if "gpu is lost" in lower or "unknown error" in lower:
+        print("torch", tag, "- GPU/driver unstable. Reboot and verify nvidia-smi first.")
+        return 5
+
+    print("torch.cuda.is_available() is False", tag)
+    if "+cu130" in tag:
+        print("If nvidia-smi works: update driver to 580+, reboot, run repair_comfyui_cuda.ps1")
+    return 1
+
+
 min_major = _read_expected_min_major()
 tag = getattr(torch, "__version__", "?")
 
-# ComfyUI 0.21+ needs +cu130 for RTX 30/40; RTX 50 may use +cu128 nightly
 if min_major >= 13 and "+cu130" not in tag:
     if "+cu128" in tag:
-        print("torch", tag, "- RTX 3050/30-40 should use cu130, not cu128 (run: install_pytorch_cuda.ps1 -Profile cu130)")
+        print(
+            "torch",
+            tag,
+            "- RTX 3050/30-40 need cu130, not cu128. Run: install_pytorch_cuda.ps1 -Force",
+        )
     else:
-        print("torch", tag, "- ComfyUI needs +cu130 wheel (run install_pytorch_cuda.ps1)")
+        print("torch", tag, "- need +cu130 (run install_pytorch_cuda.ps1 -Force)")
+    sys.exit(4)
+
+if min_major < 13 and "+cu128" not in tag:
+    if "+cu130" in tag:
+        print("torch", tag, "- RTX 50 needs cu128 nightly. Run: install_pytorch_cuda.ps1 -Force")
+    else:
+        print("torch", tag, "- need +cu128 nightly for RTX 50")
     sys.exit(4)
 
 if not torch.cuda.is_available():
-    print("torch.cuda.is_available() is False", tag)
-    sys.exit(1)
+    sys.exit(_probe_cuda_runtime(tag))
 
 cuda_ver = getattr(torch.version, "cuda", None)
 if not cuda_ver:

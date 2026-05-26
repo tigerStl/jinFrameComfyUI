@@ -28,12 +28,25 @@ if (-not (Test-Path $Py)) {
 }
 if (-not (Test-Path $Py)) { throw "Python not found at $Py" }
 
+. (Join-Path $PSScriptRoot "gpu_common.ps1")
+
 Write-Host "=== Repair CUDA PyTorch (auto GPU profile) ===" -ForegroundColor Cyan
 Write-Host "Python: $Py"
 Write-Host "Comfy:  $ComfyRoot"
 
+$smi = Get-SmiGpuInfo
+if ($smi.lost) {
+    Write-Host "GPU IS LOST - reboot first, then re-run this script." -ForegroundColor Red
+    exit 2
+}
+
+$profilePath = Join-Path $RepoRoot "jinframe_gpu_profile.json"
+if (Test-Path $profilePath) { Remove-Item $profilePath -Force }
+
 & (Join-Path $PSScriptRoot "detect_nvidia_gpu.ps1") -RepoRoot $RepoRoot
-& (Join-Path $PSScriptRoot "install_pytorch_cuda.ps1") -PythonExe $Py -RepoRoot $RepoRoot
+if ($LASTEXITCODE -eq 2) { exit 2 }
+
+& (Join-Path $PSScriptRoot "install_pytorch_cuda.ps1") -PythonExe $Py -RepoRoot $RepoRoot -Force
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & (Join-Path $PSScriptRoot "write_comfy_launch_bat.ps1") -ComfyRoot $ComfyRoot -RepoRoot $RepoRoot
