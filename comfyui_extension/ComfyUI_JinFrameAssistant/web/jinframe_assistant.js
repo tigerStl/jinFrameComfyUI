@@ -125,6 +125,60 @@ async function mountAssistantUi() {
     let agentSessionId = localStorage.getItem(LS_SESSION) || crypto.randomUUID();
     const fileSelection = new Set();
     let selectionTouched = false;
+    let lastDownloadState = { active: false, items: {}, error: null };
+    const POLL_IDLE_MS = 15000;
+    const POLL_DOWNLOAD_MS = 1000;
+
+    const scheduleRefresh = (intervalMs) => {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(refresh, intervalMs);
+    };
+
+    const setDownloadBusy = (busy) => {
+      modelSection.classList.toggle("jinframe-dl-busy", busy);
+      const mainBtn = document.getElementById("jinframe-dl-btn");
+      if (mainBtn) mainBtn.disabled = busy;
+      modelList
+        .querySelectorAll(".jinframe-file-dl-btn, .jinframe-pack-dl-btn")
+        .forEach((b) => {
+          b.disabled = busy;
+        });
+    };
+
+    const applyDownloadProgress = (dl) => {
+      lastDownloadState = dl || { active: false, items: {}, error: null };
+      setDownloadBusy(!!dl?.active);
+      for (const [fid, info] of Object.entries(dl?.items || {})) {
+        const btn = modelList.querySelector(
+          `.jinframe-file-dl-btn[data-file-id="${fid}"]`
+        );
+        if (!btn) continue;
+        btn.disabled = true;
+        if (info.done) btn.textContent = "完成";
+        else if (info.skipped) btn.textContent = "已有";
+        else btn.textContent = `${info.pct ?? 0}%`;
+      }
+      modelList.querySelectorAll(".jinframe-pack-dl-btn").forEach((b) => {
+        b.disabled = !!dl?.active;
+        if (dl?.active) b.textContent = "下载中…";
+        else b.textContent = "下载本组";
+      });
+    };
+
+    async function postDownload(payload) {
+      const resp = await api.fetchApi("/jinframe/api/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp || !resp.ok) {
+        const txt = resp ? await resp.text() : "";
+        throw new Error(
+          `下载 API 失败 (${resp?.status || "?"}): ${txt.slice(0, 120)}`
+        );
+      }
+      return resp.json();
+    }
 
     const useAgent = () => agentCb.checked;
 
@@ -197,21 +251,60 @@ async function mountAssistantUi() {
     };
 
     const startFileDownloads = async (fileIds) => {
-      if (!fileIds.length) {
-        alert("请先勾选要下载的模型，或点某一行的「下载」");
+      const ids = [...new Set(fileIds.filter(Boolean))];
+      if (!ids.length) {
+        alert("没有可下载的模型（请勾选未安装项）");
         return;
       }
-      await api.fetchApi("/jinframe/api/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ file_ids: fileIds }),
-      });
+      if (lastDownloadState.active) {
+        alert("已有下载任务进行中，请等待完成");
+        return;
+      }
+      setDownloadBusy(true);
       document.getElementById("jinframe-dl-status").textContent =
-        "已开始下载 " + fileIds.length + " 个文件，请保持窗口打开…";
-      if (!pollTimer) pollTimer = setInterval(refresh, 3000);
+        "正在启动下载…";
+      ids.forEach((fid) => {
+        const btn = modelList.querySelector(
+          `.jinframe-file-dl-btn[data-file-id="${fid}"]`
+        );
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "0%";
+        }
+      });
+      try {
+        const data = await postDownload({ file_ids: ids });
+        if (!data.started) {
+          setDownloadBusy(false);
+          const msg =
+            data.reason === "already_downloading"
+              ? "已有下载任务进行中"
+              : data.reason === "no_files_selected"
+                ? "未选择有效文件"
+                : "无法开始下载: " + (data.reason || "unknown");
+          document.getElementById("jinframe-dl-status").textContent = msg;
+          alert(msg);
+          return;
+        }
+        document.getElementById("jinframe-dl-status").textContent =
+          "已开始下载 " + ids.length + " 个文件，请保持 ComfyUI 窗口打开…";
+        scheduleRefresh(POLL_DOWNLOAD_MS);
+        await refresh();
+      } catch (e) {
+        setDownloadBusy(false);
+        const err = String(e);
+        document.getElementById("jinframe-dl-status").textContent =
+          "下载启动失败: " + err;
+        alert("下载启动失败:\n" + err);
+        modelList.querySelectorAll(".jinframe-file-dl-btn").forEach((b) => {
+          if (!b.closest(".jinframe-file-row.miss")) return;
+          b.disabled = false;
+          b.textContent = "下载";
+        });
+      }
     };
 
-    const renderPacks = (packs) => {
+    const renderPacks = (packs, dl) => {
       if (modelList.querySelector(".jinframe-file-cb")) {
         captureFileSelection();
       }
@@ -237,7 +330,33 @@ async function mountAssistantUi() {
           "beforeend",
           `<span class="jinframe-pack-title"><strong>${p.label_zh}</strong> ${badge}</span>`
         );
-        block.appendChild(header);
+        const headerRow = el("div", "jinframe-pack-header-row", "");
+        headerRow.appendChild(header);
+
+        const packMeta = el("div", "jinframe-pack-meta", "");
+        const metaParts = [];
+        if (p.lock_version != null) metaParts.push(`锁定 v${p.lock_version}`);
+        if (p.locked_at) metaParts.push(`@${String(p.locked_at).slice(0, 10)}`);
+        if (p.pack_size_label && !p.all_installed) {
+          metaParts.push(`待下载合计 ${p.pack_size_label}`);
+        }
+        if (metaParts.length) packMeta.textContent = metaParts.join(" · ");
+
+        const packDlBtn = el("button", "jinframe-pack-dl-btn", "下载本组");
+        packDlBtn.type = "button";
+        packDlBtn.disabled = p.all_installed || !!dl?.active;
+        if (p.all_installed) packDlBtn.textContent = "已就绪";
+        packDlBtn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const ids = [...block.querySelectorAll(".jinframe-file-cb")].map(
+            (c) => c.dataset.fileId
+          );
+          startFileDownloads(ids);
+        });
+        headerRow.appendChild(packDlBtn);
+        block.appendChild(headerRow);
+        if (metaParts.length) block.appendChild(packMeta);
 
         if (p.workflow_hint) {
           const hint = el("div", "jinframe-pack-hint", "");
@@ -248,8 +367,22 @@ async function mountAssistantUi() {
         const ul = el("ul", "jinframe-file-list", "");
         for (const f of p.files) {
           const li = el("li", "jinframe-file-row " + (f.installed ? "ok" : "miss"), "");
+          const metaBits = [];
+          if (f.revision_short) metaBits.push(`rev ${f.revision_short}`);
+          if (f.size_label) metaBits.push(f.size_label);
+          const metaHtml = metaBits.length
+            ? `<div class="jinframe-file-meta">${metaBits.join(" · ")}</div>`
+            : "";
+
           if (f.installed) {
-            li.innerHTML = `<span class="jinframe-file-name">✓ ${f.name}</span>`;
+            const instMeta = [];
+            if (f.size_gb != null) instMeta.push(`${f.size_gb} GB`);
+            if (f.revision_short) instMeta.push(`rev ${f.revision_short}`);
+            li.innerHTML =
+              `<span class="jinframe-file-name">✓ ${f.name}</span>` +
+              (instMeta.length
+                ? `<div class="jinframe-file-meta">${instMeta.join(" · ")}</div>`
+                : "");
           } else {
             const row = el("div", "jinframe-file-actions", "");
             const lab = el("label", "jinframe-file-label", "");
@@ -260,12 +393,21 @@ async function mountAssistantUi() {
             fcb.dataset.packId = p.id;
             fcb.checked = shouldCheckFile(f.id, false);
             lab.appendChild(fcb);
-            const nameSpan = el("span", "jinframe-file-name", f.name);
-            lab.appendChild(nameSpan);
+            const nameCol = el("div", "jinframe-file-name-col", "");
+            nameCol.appendChild(el("span", "jinframe-file-name", f.name));
+            if (metaHtml) nameCol.insertAdjacentHTML("beforeend", metaHtml);
+            lab.appendChild(nameCol);
             row.appendChild(lab);
+            const itemProg = dl?.items?.[f.id];
             const oneBtn = el("button", "jinframe-file-dl-btn", "下载");
             oneBtn.type = "button";
             oneBtn.dataset.fileId = f.id;
+            if (dl?.active) {
+              oneBtn.disabled = true;
+              if (itemProg?.done) oneBtn.textContent = "完成";
+              else if (itemProg?.skipped) oneBtn.textContent = "已有";
+              else if (itemProg) oneBtn.textContent = `${itemProg.pct ?? 0}%`;
+            }
             oneBtn.addEventListener("click", (ev) => {
               ev.preventDefault();
               ev.stopPropagation();
@@ -315,11 +457,17 @@ async function mountAssistantUi() {
       if (!statusEl) return;
       if (dl.active) {
         const items = Object.entries(dl.items || {})
-          .map(([k, v]) => `${k}: ${v.pct ?? 0}%`)
+          .map(([k, v]) => {
+            if (v.done) return `${k}: 完成`;
+            if (v.skipped) return `${k}: 跳过`;
+            return `${k}: ${v.pct ?? 0}%`;
+          })
           .join(" · ");
-        statusEl.textContent = "下载中… " + items;
+        statusEl.textContent = "下载中… " + (items || "请稍候");
       } else if (dl.error) {
         statusEl.textContent = "下载错误: " + dl.error;
+      } else if (dl._justFinished) {
+        statusEl.textContent = "下载已完成";
       } else {
         statusEl.textContent = "";
       }
@@ -331,14 +479,23 @@ async function mountAssistantUi() {
         renderAgent(st.agent || {});
         renderQwen(st.qwen);
         const dl = st.download || {};
-        updateDownloadStatus(dl);
-        if (!dl.active) {
-          renderPacks(st.packs);
+        const wasActive = lastDownloadState.active;
+        if (dl.active) {
+          applyDownloadProgress(dl);
+          renderPacks(st.packs, dl);
+        } else {
+          if (wasActive) dl._justFinished = true;
+          setDownloadBusy(false);
+          renderPacks(st.packs, dl);
+          scheduleRefresh(POLL_IDLE_MS);
         }
+        updateDownloadStatus(dl);
+        lastDownloadState = dl;
         if (st.agent?.has_key && !keyInput.value) {
           keyInput.placeholder = `已保存 ${st.agent.key_masked}，可输入新 Key 覆盖`;
         }
       } catch (e) {
+        setDownloadBusy(false);
         agentStatusEl.textContent = "无法连接助手 API，请重启 ComfyUI";
       }
     };
@@ -453,7 +610,7 @@ async function mountAssistantUi() {
 
     updateAgentUi();
     await refresh();
-    setInterval(refresh, 15000);
+    scheduleRefresh(POLL_IDLE_MS);
     uiMounted = true;
     console.log("[JinFrame] Assistant UI ready (click the blue chat button on the right)");
 }

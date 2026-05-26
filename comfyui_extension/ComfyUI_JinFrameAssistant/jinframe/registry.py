@@ -88,6 +88,23 @@ def _file_ok(path: Path, finfo: dict) -> bool:
     return path.stat().st_size >= int(min_mb * 1024 * 1024 * 0.85)
 
 
+def _format_size_label(size_bytes: int | float | None) -> str | None:
+    if not size_bytes:
+        return None
+    n = int(size_bytes)
+    gb = n / 1e9
+    if gb >= 1:
+        return f"{gb:.1f} GB"
+    return f"{n / 1e6:.0f} MB"
+
+
+def _revision_short(revision: str | None) -> str | None:
+    if not revision:
+        return None
+    rev = str(revision)
+    return rev[:12] + "…" if len(rev) > 12 else rev
+
+
 def _resolve_file(pack_id: str, finfo: dict) -> tuple[Path, bool]:
     models = comfy_models_root()
     rel = finfo.get("dir", "")
@@ -104,10 +121,14 @@ def _resolve_file(pack_id: str, finfo: dict) -> tuple[Path, bool]:
 
 def scan_packs() -> list[dict]:
     data = _load_manifest()
+    lock = _load_lock()
+    lock_version = data.get("lock_version") or (lock or {}).get("lock_version")
+    locked_at = data.get("locked_at") or (lock or {}).get("locked_at")
     out = []
     for pack in data.get("packs", []):
         files = []
         missing = 0
+        missing_bytes = 0
         for finfo in pack.get("files", []):
             path, ok = _resolve_file(pack["id"], finfo)
             if not ok and finfo["id"] == "ltx_distill_lora":
@@ -115,13 +136,25 @@ def scan_packs() -> list[dict]:
                 if repo_lora.is_file():
                     ok = True
             le = _lock_entry(finfo.get("id", ""))
+            size_bytes = finfo.get("size_bytes") or (le or {}).get("size_bytes")
+            revision = finfo.get("revision") or (le or {}).get("revision")
+            if ok and path.is_file():
+                size_label = _format_size_label(path.stat().st_size)
+            else:
+                size_label = _format_size_label(size_bytes)
+                if size_bytes:
+                    missing_bytes += int(size_bytes)
             files.append(
                 {
                     "id": finfo["id"],
                     "name": finfo["name"],
                     "installed": ok,
+                    "size_bytes": int(size_bytes) if size_bytes else None,
                     "size_gb": round(path.stat().st_size / 1e9, 2) if ok and path.is_file() else None,
-                    "revision": (le or {}).get("revision"),
+                    "size_label": size_label,
+                    "revision": revision,
+                    "revision_short": _revision_short(revision),
+                    "repo_id": finfo.get("repo_id") or (le or {}).get("repo_id"),
                     "locked": bool(le and le.get("sha256")),
                 }
             )
@@ -134,6 +167,9 @@ def scan_packs() -> list[dict]:
                 "label_en": pack.get("label_en", pack["id"]),
                 "workflow_hint": pack.get("workflow_hint", ""),
                 "note_zh": pack.get("note_zh", ""),
+                "lock_version": lock_version,
+                "locked_at": locked_at,
+                "pack_size_label": _format_size_label(missing_bytes) if missing_bytes else None,
                 "files": files,
                 "missing_count": missing,
                 "all_installed": missing == 0,
@@ -240,6 +276,11 @@ def start_downloads(pack_ids: list[str] | None = None, file_ids: list[str] | Non
                 for finfo in pack.get("files", []):
                     if finfo["id"] not in to_fetch:
                         to_fetch.append(finfo["id"])
+
+    if not to_fetch:
+        with _DOWNLOAD_LOCK:
+            _DOWNLOAD_STATE.update({"active": False, "items": {}, "error": None})
+        return {"started": False, "reason": "no_files_selected"}
 
     threading.Thread(target=_run_downloads, args=(to_fetch,), daemon=True).start()
     return {"started": True, "file_ids": to_fetch}
