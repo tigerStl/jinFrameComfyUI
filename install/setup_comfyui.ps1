@@ -256,6 +256,15 @@ if (-not $SkipPip) {
             & $Py -m pip install -r $reqPath --upgrade-strategy only-if-needed --progress-bar on
         }
     }
+
+    $ltxSm = Join-Path $CustomNodes "ComfyUI_LTX2_SM"
+    if (Test-Path (Join-Path $ltxSm "__init__.py")) {
+        Write-Log "pip ComfyUI_LTX2_SM extra: opencv (cv2) ..." "Green"
+        & $Py -m pip install opencv-python-headless --upgrade-strategy only-if-needed
+        if ($LASTEXITCODE -ne 0) {
+            Write-Log "opencv-python-headless install failed; LTX workflows need cv2" "Yellow"
+        }
+    }
 } else {
     Write-Phase "Skip pip (-SkipPip)"
 }
