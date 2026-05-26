@@ -1,9 +1,21 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
-import "./jinframe_assistant.css";
 
 const PANEL_ID = "jinframe-assistant-panel";
 const BTN_ID = "jinframe-assistant-fab";
+const CSS_HREF = "extensions/ComfyUI_JinFrameAssistant/jinframe_assistant.css";
+let uiMounted = false;
+
+function loadStylesheet() {
+  const id = "jinframe-assistant-css-link";
+  if (document.getElementById(id)) return;
+  const link = document.createElement("link");
+  link.id = id;
+  link.rel = "stylesheet";
+  link.type = "text/css";
+  link.href = CSS_HREF;
+  document.head.appendChild(link);
+}
 const LS_AGENT = "jinframe_use_agent";
 const LS_KEY = "jinframe_cursor_api_key";
 const LS_SESSION = "jinframe_agent_session";
@@ -20,13 +32,14 @@ async function fetchStatus() {
   return await r.json();
 }
 
-app.registerExtension({
-  name: "JinFrame.Assistant",
+async function mountAssistantUi() {
+  if (uiMounted || document.getElementById(BTN_ID)) {
+    uiMounted = true;
+    return;
+  }
+  loadStylesheet();
 
-  async setup() {
-    if (document.getElementById(BTN_ID)) return;
-
-    const fab = el("button", "jinframe-fab", "💬");
+  const fab = el("button", "jinframe-fab", "💬");
     fab.id = BTN_ID;
     fab.title = "JinFrame 助手";
     document.body.appendChild(fab);
@@ -323,5 +336,26 @@ app.registerExtension({
     updateAgentUi();
     await refresh();
     setInterval(refresh, 15000);
+    uiMounted = true;
+    console.log("[JinFrame] Assistant UI ready (click the blue chat button on the right)");
+}
+
+app.registerExtension({
+  name: "JinFrame.Assistant",
+
+  async init() {
+    try {
+      await mountAssistantUi();
+    } catch (e) {
+      console.error("[JinFrame] Assistant init failed:", e);
+    }
+  },
+
+  async setup() {
+    try {
+      await mountAssistantUi();
+    } catch (e) {
+      console.error("[JinFrame] Assistant setup failed:", e);
+    }
   },
 });

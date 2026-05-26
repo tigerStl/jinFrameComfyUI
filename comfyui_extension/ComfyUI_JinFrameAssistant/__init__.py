@@ -198,6 +198,18 @@ def _register_routes() -> None:
 
 
 
-_register_routes()
+try:
+
+    _register_routes()
+
+except Exception as _route_err:
+
+    import logging
+
+    logging.getLogger("jinframe").warning(
+
+        "JinFrame Assistant API routes failed (UI may still load): %s", _route_err
+
+    )
 
 
