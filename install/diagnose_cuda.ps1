@@ -22,8 +22,20 @@ Write-Host "Repo:   $RepoRoot"
 Write-Host ""
 
 Write-Host "--- nvidia-smi ---" -ForegroundColor Yellow
+$smiOk = $false
 if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
-    nvidia-smi
+    $smiOut = & nvidia-smi 2>&1 | Out-String
+    Write-Host $smiOut
+    if ($smiOut -match "GPU is lost|Unable to determine the device handle") {
+        Write-Host ""
+        Write-Host "[CRITICAL] NVIDIA driver reports GPU IS LOST (not a PyTorch bug)." -ForegroundColor Red
+        Write-Host "  1. Reboot the 3050 PC (required before any pip / ComfyUI fix)." -ForegroundColor Yellow
+        Write-Host "  2. After reboot, run: nvidia-smi  (must show RTX 3050 normally)" -ForegroundColor Yellow
+        Write-Host "  3. Then: git pull + repair_comfyui_cuda.ps1" -ForegroundColor Yellow
+        Write-Host "Remote Desktop is OK; GPU must be healthy in nvidia-smi first." -ForegroundColor DarkGray
+    } elseif ($LASTEXITCODE -eq 0 -and $smiOut -match "RTX|GeForce|NVIDIA") {
+        $smiOk = $true
+    }
 } else {
     Write-Host "nvidia-smi NOT FOUND" -ForegroundColor Red
 }
