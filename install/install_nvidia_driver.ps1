@@ -9,7 +9,9 @@ param(
     [string]$MinVersion = "580.0",
     [switch]$Force,
     [switch]$NoInstall,
-    [switch]$AllowRebootNow
+    [switch]$AllowRebootNow,
+    [switch]$TryElevate,
+    [switch]$NoElevate
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,9 +25,32 @@ function Write-Log([string]$Msg, [string]$Color = "White") {
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $Msg" -ForegroundColor $Color
 }
 
+function Invoke-ElevatedSelf {
+    $self = $PSCommandPath
+    $argList = @(
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$self`"",
+        "-RepoRoot", "`"$RepoRoot`"", "-MinVersion", $MinVersion, "-NoElevate"
+    )
+    if ($Force) { $argList += "-Force" }
+    if ($NoInstall) { $argList += "-NoInstall" }
+    if ($AllowRebootNow) { $argList += "-AllowRebootNow" }
+    Write-Log "UAC prompt: allow administrator to install NVIDIA driver ..." "Yellow"
+    try {
+        $p = Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argList -Wait -PassThru
+        return $p.ExitCode
+    } catch {
+        Write-Log "UAC denied or elevation failed: $_" "Red"
+        return 5
+    }
+}
+
 if (-not (Test-IsAdmin)) {
+    if ($TryElevate -and -not $NoElevate) {
+        exit (Invoke-ElevatedSelf)
+    }
     Write-Log "Administrator required to install NVIDIA driver." "Red"
-    Write-Log "Right-click PowerShell -> Run as administrator, then re-run this script." "Yellow"
+    Write-Log "Re-run as admin, or: .\install\install_nvidia_driver.ps1 -TryElevate" "Yellow"
+    Write-Log "Or double-click: install\升级NVIDIA驱动(管理员).bat" "Yellow"
     exit 5
 }
 

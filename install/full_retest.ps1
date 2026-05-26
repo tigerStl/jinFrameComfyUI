@@ -58,12 +58,13 @@ if ($smi.ok) {
 Step "2/8 NVIDIA driver check (580+ for cu130)"
 & (Join-Path $PSScriptRoot "check_nvidia_driver.ps1") -MinVersion "580.0"
 if ($LASTEXITCODE -eq 10) {
-    & (Join-Path $PSScriptRoot "install_nvidia_driver.ps1") -RepoRoot $RepoRoot -MinVersion "580.0"
+    & (Join-Path $PSScriptRoot "install_nvidia_driver.ps1") -RepoRoot $RepoRoot -MinVersion "580.0" -TryElevate
     if ($LASTEXITCODE -eq 5) {
-        Write-Host "Run this script as Administrator for auto driver install." -ForegroundColor Red
-        exit 5
+        Set-RebootPending -RepoRoot $RepoRoot -Reason "nvidia_driver_manual" -Detail "Run install\升级NVIDIA驱动(管理员).bat then reboot"
+        Write-Host "Driver install needs admin (UAC). Continuing; use 升级NVIDIA驱动 bat after install." -ForegroundColor Yellow
+    } elseif ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
     }
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
 Step "3/8 GPU profile"

@@ -212,13 +212,15 @@ if (-not $SkipPip) {
     $drvInstall = Join-Path $PSScriptRoot "install_nvidia_driver.ps1"
     & $drvCheck -MinVersion "580.0"
     if ($LASTEXITCODE -eq 10 -and (Test-Path $drvInstall)) {
-        Write-Log "Driver below 580 - installing latest GeForce (reboot deferred with -n) ..." "Yellow"
-        & $drvInstall -RepoRoot $RepoRoot -MinVersion "580.0"
+        Write-Log "Driver below 580 - installing latest GeForce (UAC may ask for admin) ..." "Yellow"
+        & $drvInstall -RepoRoot $RepoRoot -MinVersion "580.0" -TryElevate
         if ($LASTEXITCODE -eq 5) {
-            Write-Log "Run PowerShell as Administrator for automatic driver install, or upgrade driver manually." "Red"
-            throw "NVIDIA driver 580+ required. Run install_nvidia_driver.ps1 as admin or update from nvidia.com"
-        }
-        if ($LASTEXITCODE -ne 0) {
+            . (Join-Path $PSScriptRoot "gpu_common.ps1")
+            Set-RebootPending -RepoRoot $RepoRoot -Reason "nvidia_driver_manual" -Detail "Driver still < 580. After install finishes: run install\升级NVIDIA驱动(管理员).bat as admin, reboot, then repair_comfyui_cuda.ps1"
+            Write-Log "Driver auto-install skipped (no admin / UAC denied)." "Yellow"
+            Write-Log "ComfyUI install will CONTINUE. Upgrade driver after install, then reboot." "Yellow"
+            Write-Log "Helper: install\升级NVIDIA驱动(管理员).bat  OR  nvidia.com/Download" "Cyan"
+        } elseif ($LASTEXITCODE -ne 0) {
             throw "install_nvidia_driver.ps1 failed with exit $LASTEXITCODE"
         }
     }
