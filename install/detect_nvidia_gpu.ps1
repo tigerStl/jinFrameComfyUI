@@ -1,5 +1,5 @@
 # Detect NVIDIA GPU and choose PyTorch install profile for this machine.
-# Writes jinframe_gpu_profile.json next to repo root.
+# RTX 50xx (5060 etc.) -> cu128 nightly (sm_120). RTX 30/40xx (3050, 3060, 4070) -> cu130 (ComfyUI 0.21+).
 # Usage:
 #   .\install\detect_nvidia_gpu.ps1 -RepoRoot "K:\tiger\jinFrame\jinFrameComfyUI"
 
@@ -20,9 +20,10 @@ if (-not $OutFile) {
 
 function Test-Rtx50Series {
     param([string]$Name)
+    # Must NOT match RTX 3050 / 4050 (30xx, 40xx). Only 50xx Blackwell.
     $u = $Name.ToUpperInvariant()
-    if ($u -match 'RTX\s*5[0-9]{2}') { return $true }
-    if ($u -match '\b(5060|5070|5080|5090|5050)\b') { return $true }
+    if ($u -match '\bRTX\s*50[0-9]{2}\b') { return $true }
+    if ($u -match '\b(5050|5060|5070|5080|5090)\b') { return $true }
     return $false
 }
 
@@ -34,6 +35,7 @@ $profile = @{
     torch_index_url = ""
     torch_nightly = $false
     comfy_launch_extra = "--cpu"
+    min_cuda_major = 13
     reason = ""
     detected_at = (Get-Date).ToString("o")
 }
@@ -64,19 +66,22 @@ if ([string]::IsNullOrWhiteSpace($nameLine)) {
 $profile.has_nvidia = $true
 $profile.gpu_name = $nameLine
 $profile.driver_version = $drvLine
+$launchGpu = "--lowvram --disable-cuda-malloc"
 
 if (Test-Rtx50Series -Name $nameLine) {
     $profile.torch_profile = "cu128_nightly"
     $profile.torch_index_url = "https://download.pytorch.org/whl/nightly/cu128"
     $profile.torch_nightly = $true
-    $profile.comfy_launch_extra = "--lowvram"
-    $profile.reason = "RTX 50 series / Blackwell (sm_120): PyTorch cu128 nightly."
+    $profile.comfy_launch_extra = $launchGpu
+    $profile.min_cuda_major = 12
+    $profile.reason = "RTX 50 series (e.g. 5060): PyTorch cu128 nightly for sm_120."
 } else {
-    $profile.torch_profile = "cu124"
-    $profile.torch_index_url = "https://download.pytorch.org/whl/cu124"
+    $profile.torch_profile = "cu130"
+    $profile.torch_index_url = "https://download.pytorch.org/whl/cu130"
     $profile.torch_nightly = $false
-    $profile.comfy_launch_extra = "--lowvram"
-    $profile.reason = "NVIDIA GPU (e.g. RTX 3060/40 series): PyTorch CUDA 12.4 stable cu124."
+    $profile.comfy_launch_extra = $launchGpu
+    $profile.min_cuda_major = 13
+    $profile.reason = "RTX 30/40 series (e.g. 3050, 3060, 4070): PyTorch cu130 for ComfyUI 0.21+."
 }
 
 $profile | ConvertTo-Json -Depth 4 | Set-Content -Path $OutFile -Encoding UTF8
@@ -84,5 +89,6 @@ $profile | ConvertTo-Json -Depth 4 | Set-Content -Path $OutFile -Encoding UTF8
 Write-Host "[gpu] $($profile.gpu_name)" -ForegroundColor Cyan
 Write-Host "[gpu] driver $($profile.driver_version)" -ForegroundColor DarkGray
 Write-Host "[gpu] torch profile: $($profile.torch_profile) -> $($profile.torch_index_url)" -ForegroundColor Green
+Write-Host "[gpu] launch: $($profile.comfy_launch_extra)" -ForegroundColor Green
 Write-Host "[gpu] $($profile.reason)" -ForegroundColor DarkGray
 Write-Host "[gpu] saved $OutFile" -ForegroundColor DarkGray
