@@ -55,27 +55,36 @@ if ($smi.ok) {
     Write-Host "No NVIDIA GPU - CPU mode only" -ForegroundColor Yellow
 }
 
-Step "2/7 GPU profile"
+Step "2/8 NVIDIA driver check (580+ for cu130)"
+& (Join-Path $PSScriptRoot "check_nvidia_driver.ps1") -MinVersion "580.0"
+if ($LASTEXITCODE -eq 10) {
+    & (Join-Path $PSScriptRoot "install_nvidia_driver.ps1") -RepoRoot $RepoRoot -MinVersion "580.0"
+    if ($LASTEXITCODE -eq 5) {
+        Write-Host "Run this script as Administrator for auto driver install." -ForegroundColor Red
+        exit 5
+    }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+Step "3/8 GPU profile"
 & (Join-Path $PSScriptRoot "detect_nvidia_gpu.ps1") -RepoRoot $RepoRoot
 if ($LASTEXITCODE -eq 2) { exit 2 }
 
-Step "3/7 PyTorch CUDA"
-$pyArgs = @("-PythonExe", $PythonExe, "-RepoRoot", $RepoRoot)
-if ($Force) { $pyArgs += "-Force" }
-& (Join-Path $PSScriptRoot "install_pytorch_cuda.ps1") @pyArgs
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
 if (-not $SkipSetup) {
-    Step "4/7 ComfyUI setup (pinned git + pip + assistant)"
+    Step "4/8 ComfyUI setup (git + pip + PyTorch + assistant)"
     $setupArgs = @("-ComfyRoot", $ComfyRoot)
     if ($Force) { $setupArgs += "-Force" }
     & (Join-Path $PSScriptRoot "setup_comfyui.ps1") @setupArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } else {
-    Step "4/7 Skip ComfyUI setup (-SkipSetup)"
+    Step "4/8 PyTorch CUDA only (-SkipSetup)"
+    $pyArgs = @("-PythonExe", $PythonExe, "-RepoRoot", $RepoRoot)
+    if ($Force) { $pyArgs += "-Force" }
+    & (Join-Path $PSScriptRoot "install_pytorch_cuda.ps1") @pyArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-Step "5/7 Sync extension to ComfyUI"
+Step "5/8 Sync extension to ComfyUI"
 $sync = Join-Path $PSScriptRoot "sync_to_comfyui.ps1"
 if (Test-Path $sync) {
     $env:COMFYUI_ROOT = $ComfyRoot
@@ -83,11 +92,14 @@ if (Test-Path $sync) {
     & $sync -ComfyRoot $ComfyRoot
 }
 
-Step "6/7 Launch bat + CUDA diagnose"
+Step "6/8 Launch bat + CUDA diagnose"
 & (Join-Path $PSScriptRoot "write_comfy_launch_bat.ps1") -ComfyRoot $ComfyRoot -RepoRoot $RepoRoot
 & (Join-Path $PSScriptRoot "diagnose_cuda.ps1") -PythonExe $PythonExe -RepoRoot $RepoRoot
 
-Step "7/7 Done"
+Step "7/8 Reboot reminder"
+& (Join-Path $PSScriptRoot "prompt_reboot_if_needed.ps1") -RepoRoot $RepoRoot
+
+Step "8/8 Done"
 $bat = Join-Path $ComfyRoot "启动ComfyUI.bat"
 Write-Host ""
 Write-Host "Retest checklist:" -ForegroundColor Green

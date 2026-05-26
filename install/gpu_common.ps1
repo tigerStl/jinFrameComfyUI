@@ -116,3 +116,71 @@ function Get-DriverHintForProfile {
     }
     return ""
 }
+
+function Get-WindowsNvidiaOsId {
+    if ([System.Environment]::OSVersion.Version.Build -ge 22000) { return 135 }
+    return 57
+}
+
+function Get-LatestGeForceGameReadyDriver {
+  <# Query NVIDIA for latest WHQL Game Ready driver (all GeForce, Win10/11 64 DCH). #>
+    param([int]$OsId = 0)
+    if ($OsId -eq 0) { $OsId = Get-WindowsNvidiaOsId }
+    $uri = "https://www.nvidia.com/Download/processFind.aspx?psid=107&pfid=879&osid=$OsId&lid=1&whql=1&lang=en-us&ctk=0&dtcid=1"
+    $r = Invoke-WebRequest -Uri $uri -UseBasicParsing -Headers @{ "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+    $vers = [regex]::Matches($r.Content, 'class="gridItem">([0-9]+\.[0-9]+)</td>')
+    if ($vers.Count -eq 0) { return $null }
+    $best = $null
+    foreach ($m in $vers) {
+        $v = $m.Groups[1].Value
+        try {
+            $ver = [version]$v
+            if (-not $best -or $ver -gt $best.Version) {
+                $best = [PSCustomObject]@{
+                    Version     = $v
+                    DownloadUrl = "https://us.download.nvidia.com/Windows/$v/$v-desktop-win10-win11-64bit-international-dch-whql.exe"
+                    OsId        = $OsId
+                }
+            }
+        } catch { }
+    }
+    return $best
+}
+
+function Get-RebootPendingFile {
+    param([string]$RepoRoot)
+    return (Join-Path $RepoRoot "jinframe_reboot_pending.json")
+}
+
+function Set-RebootPending {
+    param(
+        [string]$RepoRoot,
+        [string]$Reason,
+        [string]$Detail = ""
+    )
+    $path = Get-RebootPendingFile $RepoRoot
+    @{
+        reason     = $Reason
+        detail     = $Detail
+        created_at = (Get-Date).ToString("o")
+    } | ConvertTo-Json -Depth 3 | Set-Content -Path $path -Encoding UTF8
+    return $path
+}
+
+function Test-RebootPending {
+    param([string]$RepoRoot)
+    $path = Get-RebootPendingFile $RepoRoot
+    return (Test-Path $path)
+}
+
+function Clear-RebootPending {
+    param([string]$RepoRoot)
+    $path = Get-RebootPendingFile $RepoRoot
+    if (Test-Path $path) { Remove-Item $path -Force }
+}
+
+function Test-IsAdmin {
+    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $p = New-Object Security.Principal.WindowsPrincipal $id
+    return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}

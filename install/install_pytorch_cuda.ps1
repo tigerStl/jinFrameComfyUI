@@ -244,6 +244,13 @@ if ($wheelOk) {
     if ($probeCode -eq 0) {
         Write-Log "SUCCESS: $installedVer" "Green"
         Save-Profile $gpu
+        Clear-RebootPending $RepoRoot
+        exit 0
+    }
+    if ((Test-RebootPending $RepoRoot) -and $probeCode -in 1, 5, 6) {
+        Write-Log "PyTorch $installedVer OK; CUDA probe skipped (driver reboot pending)" "Yellow"
+        Write-Log "Finish install, then reboot and run repair_comfyui_cuda.ps1" "Yellow"
+        Save-Profile $gpu
         exit 0
     }
     Report-CudaRuntimeFailure $gpu $probeCode $installedVer

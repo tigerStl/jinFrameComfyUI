@@ -13,7 +13,7 @@ param(
 $ErrorActionPreference = "Stop"
 $script:PhaseStart = Get-Date
 $script:StepIndex = 0
-$script:StepTotal = 8
+$script:StepTotal = 9
 
 function Write-Log {
     param([string]$Message, [string]$Color = "White")
@@ -207,6 +207,22 @@ If the folder is corrupt, delete $ComfyRoot and run again.
 Write-Log "comfy\options.py OK" "Green"
 
 if (-not $SkipPip) {
+    Write-Phase "NVIDIA driver (cu130 needs 580+)"
+    $drvCheck = Join-Path $PSScriptRoot "check_nvidia_driver.ps1"
+    $drvInstall = Join-Path $PSScriptRoot "install_nvidia_driver.ps1"
+    & $drvCheck -MinVersion "580.0"
+    if ($LASTEXITCODE -eq 10 -and (Test-Path $drvInstall)) {
+        Write-Log "Driver below 580 - installing latest GeForce (reboot deferred with -n) ..." "Yellow"
+        & $drvInstall -RepoRoot $RepoRoot -MinVersion "580.0"
+        if ($LASTEXITCODE -eq 5) {
+            Write-Log "Run PowerShell as Administrator for automatic driver install, or upgrade driver manually." "Red"
+            throw "NVIDIA driver 580+ required. Run install_nvidia_driver.ps1 as admin or update from nvidia.com"
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "install_nvidia_driver.ps1 failed with exit $LASTEXITCODE"
+        }
+    }
+
     Write-Phase "Python dependencies (pip)"
     $Py = Resolve-PythonForComfy -ComfyRoot $ComfyRoot
     Write-Log "Python: $Py" "Cyan"
@@ -296,3 +312,8 @@ if (Test-Path $writeBat) {
 $launchBat = Join-Path $ComfyRoot "启动ComfyUI.bat"
 Write-Log "Start: $launchBat" "Cyan"
 Write-Log "Full retest: .\install\full_retest.ps1 -ComfyRoot `"$ComfyRoot`"" "DarkGray"
+
+& (Join-Path $PSScriptRoot "prompt_reboot_if_needed.ps1") -RepoRoot $RepoRoot
+if ($LASTEXITCODE -eq 2) {
+    Write-Log "Install finished except: REBOOT required before ComfyUI can use GPU." "Yellow"
+}
