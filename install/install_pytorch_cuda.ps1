@@ -168,6 +168,14 @@ function Save-GpuProfile($gpu) {
     $gpu | ConvertTo-Json -Depth 4 | Set-Content -Path $ProfileFile -Encoding UTF8
 }
 
+function Test-Rtx50GpuName {
+    param([string]$Name)
+    $u = $Name.ToUpperInvariant()
+    if ($u -match '\bRTX\s*50[0-9]{2}\b') { return $true }
+    if ($u -match '\b(5050|5060|5070|5080|5090)\b') { return $true }
+    return $false
+}
+
 Write-Log "=== JinFrame PyTorch setup ===" "Cyan"
 Write-Log "Python: $PythonExe"
 
@@ -213,17 +221,20 @@ if ($gpu.torch_profile -eq "cu128_nightly") {
         Write-Log "Fallback cu130 OK" "Green"
         exit 0
     }
-} else {
-    Write-Log "cu130 failed; trying cu128 nightly (RTX 50 / 5060) ..." "DarkYellow"
+} elseif (Test-Rtx50GpuName $gpu.gpu_name) {
+    Write-Log "cu130 failed; trying cu128 nightly (RTX 50 series only) ..." "DarkYellow"
     $gpu.torch_profile = "cu128_nightly"
     $gpu.torch_index_url = "https://download.pytorch.org/whl/nightly/cu128"
     $gpu.torch_nightly = $true
     $gpu.min_cuda_major = 12
     if ((Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:$true -ProfileName "cu128_nightly") -and (Test-TorchCudaOk $gpu)) {
         Save-GpuProfile $gpu
-        Write-Log "Fallback cu128 nightly OK" "Green"
+        Write-Log "Fallback cu128 nightly OK (RTX 50)" "Green"
         exit 0
     }
+} else {
+    Write-Log "cu130 failed on RTX 30/40 (e.g. 3050). NOT installing cu128 (ComfyUI needs cu130)." "Red"
+    Write-Log "Try: $PythonExe -m pip install --force-reinstall torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu130" "Yellow"
 }
 
 Write-Error @"

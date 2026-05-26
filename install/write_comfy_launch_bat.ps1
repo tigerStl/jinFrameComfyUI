@@ -1,4 +1,4 @@
-# Regenerate 启动ComfyUI.bat with CUDA preflight and correct launch flags.
+# Regenerate launch bat with CUDA preflight (ASCII-only for PowerShell 5.1).
 # Usage:
 #   .\install\write_comfy_launch_bat.ps1 -ComfyRoot "K:\ComfyUI\ComfyUI" -RepoRoot "K:\tiger\jinFrame\jinFrameComfyUI"
 
@@ -54,48 +54,54 @@ if (Test-Path $pathsPath) {
 }
 
 $probe = Join-Path $PSScriptRoot "probe_torch_cuda.py"
-$lines = @(
-    "@echo off",
-    "chcp 65001 >nul",
-    "title 金帧 ComfyUI",
-    "cd /d `"$ComfyRoot`"",
-    "set `"PYTHONPATH=%CD%`"",
-    "set `"COMFYUI_ROOT=$ComfyRoot`"",
-    "set `"JINFRAME_REPO_ROOT=$RepoRoot`""
-)
+$repairPs = Join-Path $RepoRoot "install\repair_comfyui_cuda.ps1"
+
+$bat = @"
+@echo off
+chcp 65001 >nul
+title JinFrame ComfyUI
+cd /d "$ComfyRoot"
+set "PYTHONPATH=%CD%"
+set "COMFYUI_ROOT=$ComfyRoot"
+set "JINFRAME_REPO_ROOT=$RepoRoot"
+"@
+
 if ($pathSet) {
-    $lines += "set `"PATH=$pathSet%PATH%`""
+    $bat += "`r`nset `"PATH=$pathSet%PATH%`""
 }
-$lines += @(
-    "",
-    "if not exist `"main.py`" (",
-    "  echo [错误] 未找到 main.py",
-    "  pause",
-    "  exit /b 1",
-    ")",
-    "",
-    "echo === CUDA preflight ===",
-    "`"$Py`" `"$probe`"",
-    "if errorlevel 1 (",
-    "  echo.",
-    "  echo [错误] PyTorch CUDA 未就绪。3050/30/40 需 cu130，5060/50 需 cu128 nightly。",
-    "  echo 请在仓库目录执行:",
-    "  echo   powershell -File `"$RepoRoot\install\repair_comfyui_cuda.ps1`" -ComfyRoot `"$ComfyRoot`"",
-    "  pause",
-    "  exit /b 1",
-    ")",
-    "",
-    "echo 启动 ComfyUI: $ComfyRoot",
-    "echo 启动参数: $launchArgs",
-    "`"$Py`" main.py $launchArgs",
-    "set ERR=%ERRORLEVEL%",
-    "if %ERR% neq 0 (",
-    "  echo ComfyUI 退出代码 %ERR%",
-    "  echo 勿单独 pip install -r requirements.txt，会覆盖 CUDA 版 torch",
-    ")",
-    "pause"
+
+$bat += @"
+
+if not exist "main.py" (
+  echo [ERROR] main.py not found
+  pause
+  exit /b 1
 )
 
-$lines | Set-Content -Path $batPath -Encoding UTF8
+echo === CUDA preflight ===
+"$Py" "$probe"
+if errorlevel 1 (
+  echo.
+  echo [ERROR] PyTorch CUDA not ready.
+  echo RTX 3050 / 30-40 need cu130. RTX 5060 / 50 need cu128 nightly.
+  echo Run:
+  echo   powershell -File "$repairPs" -ComfyRoot "$ComfyRoot"
+  pause
+  exit /b 1
+)
+
+echo Starting ComfyUI: $ComfyRoot
+echo Args: $launchArgs
+"$Py" main.py $launchArgs
+set ERR=%ERRORLEVEL%
+if %ERR% neq 0 (
+  echo ComfyUI exited with code %ERR%
+  echo Do NOT run: pip install -r requirements.txt  (overwrites CUDA torch)
+)
+pause
+"@
+
+$utf8bom = New-Object System.Text.UTF8Encoding $true
+[System.IO.File]::WriteAllText($batPath, $bat, $utf8bom)
 Write-Host "Wrote $batPath" -ForegroundColor Green
 Write-Host "Launch: $launchArgs" -ForegroundColor Cyan

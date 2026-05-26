@@ -39,9 +39,12 @@ def _cuda_build_major() -> int:
 min_major = _read_expected_min_major()
 tag = getattr(torch, "__version__", "?")
 
-# ComfyUI 0.21+ checks +cu130 in the wheel tag for optimized ops
-if min_major >= 13 and "+cu130" not in tag and "+cu128" not in tag:
-    print("torch", tag, "- ComfyUI needs +cu130 wheel (run install_pytorch_cuda.ps1)")
+# ComfyUI 0.21+ needs +cu130 for RTX 30/40; RTX 50 may use +cu128 nightly
+if min_major >= 13 and "+cu130" not in tag:
+    if "+cu128" in tag:
+        print("torch", tag, "- RTX 3050/30-40 should use cu130, not cu128 (run: install_pytorch_cuda.ps1 -Profile cu130)")
+    else:
+        print("torch", tag, "- ComfyUI needs +cu130 wheel (run install_pytorch_cuda.ps1)")
     sys.exit(4)
 
 if not torch.cuda.is_available():
