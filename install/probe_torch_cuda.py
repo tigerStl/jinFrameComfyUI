@@ -1,4 +1,4 @@
-"""Verify PyTorch CUDA for this machine's profile (cu130 vs cu128 nightly)."""
+"""Verify PyTorch CUDA (same checks ComfyUI uses at startup)."""
 import json
 import os
 import sys
@@ -37,34 +37,34 @@ def _cuda_build_major() -> int:
 
 
 min_major = _read_expected_min_major()
+tag = getattr(torch, "__version__", "?")
+
+# ComfyUI 0.21+ checks +cu130 in the wheel tag for optimized ops
+if min_major >= 13 and "+cu130" not in tag and "+cu128" not in tag:
+    print("torch", tag, "- ComfyUI needs +cu130 wheel (run install_pytorch_cuda.ps1)")
+    sys.exit(4)
 
 if not torch.cuda.is_available():
-    print("torch.cuda.is_available() is False")
+    print("torch.cuda.is_available() is False", tag)
     sys.exit(1)
 
 cuda_ver = getattr(torch.version, "cuda", None)
 if not cuda_ver:
-    print("torch built without CUDA")
+    print("torch built without CUDA", tag)
     sys.exit(2)
 
 major = _cuda_build_major()
 if major < min_major:
-    print(
-        "torch",
-        torch.__version__,
-        "cuda",
-        cuda_ver,
-        f"- need CUDA>={min_major}.0 for this GPU profile",
-    )
+    print("torch", tag, "cuda", cuda_ver, f"- need CUDA>={min_major}.0")
     sys.exit(4)
 
 try:
-    _ = torch.cuda.device_count()
-    name = torch.cuda.get_device_name(0)
+    dev = torch.cuda.current_device()
+    name = torch.cuda.get_device_name(dev)
 except Exception as exc:
-    print("cuda init failed:", exc)
+    print("cuda init failed (ComfyUI will crash):", exc)
+    print("torch", tag, "cuda", cuda_ver)
     sys.exit(5)
 
-print("torch", torch.__version__, "cuda", cuda_ver)
-print("device", name)
+print("torch", tag, "cuda", cuda_ver, "device", dev, name)
 sys.exit(0)

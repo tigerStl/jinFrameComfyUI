@@ -36,6 +36,8 @@ Write-Host "Comfy:  $ComfyRoot"
 & (Join-Path $PSScriptRoot "install_pytorch_cuda.ps1") -PythonExe $Py -RepoRoot $RepoRoot
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+& (Join-Path $PSScriptRoot "write_comfy_launch_bat.ps1") -ComfyRoot $ComfyRoot -RepoRoot $RepoRoot
+
 $profile = Get-Content (Join-Path $RepoRoot "jinframe_gpu_profile.json") -Raw | ConvertFrom-Json
 Write-Host ""
 Write-Host "Profile: $($profile.torch_profile)" -ForegroundColor Green

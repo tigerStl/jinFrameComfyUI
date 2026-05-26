@@ -136,16 +136,28 @@ function Test-TorchCudaOk($gpu) {
 }
 
 function Install-TorchFromIndex {
-    param([string]$IndexUrl, [bool]$Nightly, [switch]$UseExtraIndex)
+    param(
+        [string]$IndexUrl,
+        [bool]$Nightly,
+        [string]$ProfileName = "",
+        [switch]$UseExtraIndex
+    )
     Write-Log "pip uninstall torch / torchvision / torchaudio ..." "Yellow"
     Invoke-Pip -PipArgs @("uninstall", "-y", "torch", "torchvision", "torchaudio") | Out-Null
 
     $pipArgs = @("install", "--no-cache-dir", "--force-reinstall")
     if ($Nightly) { $pipArgs += "--pre" }
-    if ($UseExtraIndex) {
-        $pipArgs += @("torch", "torchvision", "torchaudio", "--extra-index-url", $IndexUrl)
+    if ($ProfileName -eq "cu130") {
+        $pipArgs += @("torch==2.10.0", "torchvision==0.25.0", "torchaudio==2.10.0")
+    } elseif ($ProfileName -eq "cu128_nightly") {
+        $pipArgs += @("torch", "torchvision", "torchaudio")
     } else {
-        $pipArgs += @("torch", "torchvision", "torchaudio", "--index-url", $IndexUrl)
+        $pipArgs += @("torch", "torchvision", "torchaudio")
+    }
+    if ($UseExtraIndex) {
+        $pipArgs += @("--extra-index-url", $IndexUrl)
+    } else {
+        $pipArgs += @("--index-url", $IndexUrl)
     }
 
     Write-Log "pip install from $IndexUrl (10-30 min) ..." "Cyan"
@@ -170,7 +182,7 @@ if ($gpu.torch_profile -eq "cpu") {
     exit 0
 }
 
-if (Test-TorchCudaOk $gpu) {
+if ((Test-TorchCudaOk $gpu) -and $Profile -ne "cu130" -and $Profile -ne "cu128_nightly") {
     Write-Log "PyTorch CUDA OK for $($gpu.torch_profile)" "Green"
     Save-GpuProfile $gpu
     Invoke-Py -ScriptPath (Join-Path $PSScriptRoot "probe_torch_cuda.py") | Out-Null
@@ -179,10 +191,10 @@ if (Test-TorchCudaOk $gpu) {
 
 Write-Log "Installing PyTorch: $($gpu.torch_profile)" "Yellow"
 
-$ok = Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:([bool]$gpu.torch_nightly)
+$ok = Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:([bool]$gpu.torch_nightly) -ProfileName $gpu.torch_profile
 if (-not $ok -and $gpu.torch_profile -eq "cu130") {
     Write-Log "Retry cu130 with extra-index-url ..." "DarkYellow"
-    $ok = Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:$false -UseExtraIndex
+    $ok = Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:$false -ProfileName "cu130" -UseExtraIndex
 }
 if ($ok -and (Test-TorchCudaOk $gpu)) {
     Write-Log "PyTorch install OK ($($gpu.torch_profile))" "Green"
@@ -196,7 +208,7 @@ if ($gpu.torch_profile -eq "cu128_nightly") {
     $gpu.torch_index_url = "https://download.pytorch.org/whl/cu130"
     $gpu.torch_nightly = $false
     $gpu.min_cuda_major = 13
-    if ((Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:$false) -and (Test-TorchCudaOk $gpu)) {
+    if ((Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:$false -ProfileName "cu130") -and (Test-TorchCudaOk $gpu)) {
         Save-GpuProfile $gpu
         Write-Log "Fallback cu130 OK" "Green"
         exit 0
@@ -207,7 +219,7 @@ if ($gpu.torch_profile -eq "cu128_nightly") {
     $gpu.torch_index_url = "https://download.pytorch.org/whl/nightly/cu128"
     $gpu.torch_nightly = $true
     $gpu.min_cuda_major = 12
-    if ((Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:$true) -and (Test-TorchCudaOk $gpu)) {
+    if ((Install-TorchFromIndex -IndexUrl $gpu.torch_index_url -Nightly:$true -ProfileName "cu128_nightly") -and (Test-TorchCudaOk $gpu)) {
         Save-GpuProfile $gpu
         Write-Log "Fallback cu128 nightly OK" "Green"
         exit 0
