@@ -28,6 +28,8 @@ output/
 jinframe_install_paths.json
 jinframe_gpu_profile.json
 jinframe_reboot_pending.json
+docs/NVIDIA_DRIVER_UPGRADE.zh-CN.md
+docs/NVIDIA_DRIVER_UPGRADE.en.md
 
 # Local scan / temp
 install/_hits.txt

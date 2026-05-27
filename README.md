@@ -613,20 +613,23 @@ cd K:\tiger\jinFrame\jinFrameComfyUI
 
 然后双击 **`启动ComfyUI.bat`**（内含 CUDA 预检）。**不要**单独执行 `pip install -r requirements.txt`，会覆盖 CUDA 版 torch。
 
-若已装上 `2.10.0+cu130` 但报 `cudaErrorNotSupported` / `torch.cuda.is_available() is False`：**不是 wheel 装错**，而是 **NVIDIA 驱动过旧**（cu130 需要 **驱动 580.0+**）。
-
-**自动检查并安装最新驱动（安装过程不重启，全部完成后再提示重启）：**
+**安装前必须先满足驱动版本**（脚本**不会**自动装驱动，不达标会**立即退出**）：
 
 ```powershell
-# 需「以管理员身份」运行 PowerShell
-.\install\check_nvidia_driver.ps1
-.\install\install_nvidia_driver.ps1
-# 继续 ComfyUI / 一键安装；最后在屏幕看到 REBOOT REQUIRED 再重启
+.\install\ensure_nvidia_driver.ps1
 ```
 
-手动升级： [NVIDIA 驱动下载](https://www.nvidia.com/Download/index.aspx) → 重启 → `.\install\repair_comfyui_cuda.ps1`
+- RTX **3050 / 30–40**：驱动 **≥ 580.0**（cu130 / CUDA 13）  
+- RTX **5060 / 50**：驱动 **≥ 570.0**（cu128 nightly）  
 
-若安装报错 `chrome_elf.dll` / `Access is denied`（NvApp/CEF）：请 `git pull` 后用新版脚本（仅装 **Display.Driver**，解压到 `%LOCALAPPDATA%\jinframe`），或安装时**取消勾选 NVIDIA App**。
+未通过时会生成说明文档：
+
+- `docs/NVIDIA_DRIVER_UPGRADE.zh-CN.md`  
+- `docs/NVIDIA_DRIVER_UPGRADE.en.md`  
+
+按文档手动升级并**重启**后，再运行 `ensure_nvidia_driver.ps1` 或一键安装。
+
+若已装上 `2.10.0+cu130` 但 `cudaErrorNotSupported`：先升级驱动，再 `.\install\repair_comfyui_cuda.ps1`。安装 NVIDIA 驱动时建议**只装图形驱动**，**不要勾选 NVIDIA App**（避免 `chrome_elf.dll` 权限错误）。
 
 ---
 

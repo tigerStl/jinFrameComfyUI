@@ -13,7 +13,7 @@ param(
 $ErrorActionPreference = "Stop"
 $script:PhaseStart = Get-Date
 $script:StepIndex = 0
-$script:StepTotal = 9
+$script:StepTotal = 8
 
 function Write-Log {
     param([string]$Message, [string]$Color = "White")
@@ -54,6 +54,11 @@ if (-not $ComfyRoot) {
 }
 $ComfyRoot = [System.IO.Path]::GetFullPath($ComfyRoot)
 $CustomNodes = Join-Path $ComfyRoot "custom_nodes"
+
+& (Join-Path $PSScriptRoot "ensure_nvidia_driver.ps1") -RepoRoot $RepoRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "NVIDIA driver pre-check failed (exit $LASTEXITCODE). See docs\NVIDIA_DRIVER_UPGRADE.*.md"
+}
 
 Write-Log "=== JinFrame ComfyUI setup (pinned) ===" "Cyan"
 Write-Log "Repo:  $RepoRoot"
@@ -207,24 +212,6 @@ If the folder is corrupt, delete $ComfyRoot and run again.
 Write-Log "comfy\options.py OK" "Green"
 
 if (-not $SkipPip) {
-    Write-Phase "NVIDIA driver (cu130 needs 580+)"
-    $drvCheck = Join-Path $PSScriptRoot "check_nvidia_driver.ps1"
-    $drvInstall = Join-Path $PSScriptRoot "install_nvidia_driver.ps1"
-    & $drvCheck -MinVersion "580.0"
-    if ($LASTEXITCODE -eq 10 -and (Test-Path $drvInstall)) {
-        Write-Log "Driver below 580 - installing latest GeForce (UAC may ask for admin) ..." "Yellow"
-        & $drvInstall -RepoRoot $RepoRoot -MinVersion "580.0" -TryElevate
-        if ($LASTEXITCODE -eq 5) {
-            . (Join-Path $PSScriptRoot "gpu_common.ps1")
-            Set-RebootPending -RepoRoot $RepoRoot -Reason "nvidia_driver_manual" -Detail "Driver still < 580. After install finishes: run install\升级NVIDIA驱动(管理员).bat as admin, reboot, then repair_comfyui_cuda.ps1"
-            Write-Log "Driver auto-install skipped (no admin / UAC denied)." "Yellow"
-            Write-Log "ComfyUI install will CONTINUE. Upgrade driver after install, then reboot." "Yellow"
-            Write-Log "Helper: install\升级NVIDIA驱动(管理员).bat  OR  nvidia.com/Download" "Cyan"
-        } elseif ($LASTEXITCODE -ne 0) {
-            throw "install_nvidia_driver.ps1 failed with exit $LASTEXITCODE"
-        }
-    }
-
     Write-Phase "Python dependencies (pip)"
     $Py = Resolve-PythonForComfy -ComfyRoot $ComfyRoot
     Write-Log "Python: $Py" "Cyan"

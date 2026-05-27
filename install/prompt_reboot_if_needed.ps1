@@ -25,13 +25,6 @@ Write-Host ""
 Write-Host "  Reason: $($info.reason)" -ForegroundColor Yellow
 if ($info.detail) { Write-Host "  $($info.detail)" -ForegroundColor DarkGray }
 Write-Host ""
-if ($info.reason -eq "nvidia_driver_manual") {
-    Write-Host "  Driver still too old for PyTorch cu130. Do ONE of:" -ForegroundColor Yellow
-    Write-Host "    A) Double-click: install\升级NVIDIA驱动(管理员).bat  (click Yes on UAC)" -ForegroundColor White
-    Write-Host "    B) https://www.nvidia.com/Download/index.aspx  (RTX 3050, latest Game Ready)" -ForegroundColor White
-    Write-Host "  Then reboot, then repair CUDA (step 2 below)." -ForegroundColor Yellow
-    Write-Host ""
-}
 Write-Host "  After reboot:" -ForegroundColor Cyan
 Write-Host "    1. nvidia-smi  (driver should be 580+)" -ForegroundColor White
 Write-Host "    2. .\install\repair_comfyui_cuda.ps1 -ComfyRoot YOUR_COMFY_PATH" -ForegroundColor White
