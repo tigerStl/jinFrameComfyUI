@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 from typing import Any
 
@@ -21,6 +22,12 @@ _AGENT_SYSTEM = """你是 JinFrame ComfyUI 工作流编辑助手。工作目录�
 _SESSIONS: dict[str, str] = {}
 _SESSION_LOCK = threading.Lock()
 _SDK_OK: bool | None = None
+
+
+def _use_resume() -> bool:
+    """Agent.resume() 在部分 Windows 环境会触发 WinError 10038；默认关闭。"""
+    v = os.environ.get("JINFRAME_CURSOR_AGENT_USE_RESUME", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
 
 
 def sdk_available() -> bool:
@@ -70,6 +77,11 @@ def _extract_reply(result: Any, run: Any | None = None) -> str:
     return str(result)
 
 
+def _is_socket_error(err_text: str) -> bool:
+    t = (err_text or "").lower()
+    return ("winerror 10038" in t) or ("not a socket" in t) or ("10038" in t)
+
+
 def _run_agent_sync(
     api_key: str,
     user_message: str,
@@ -108,17 +120,12 @@ def _run_agent_sync(
         with _SESSION_LOCK:
             _SESSIONS.pop(sid, None)
 
-    def _is_socket_error(err_text: str) -> bool:
-        t = (err_text or "").lower()
-        # Windows socket/stream teardown seen when the underlying connection is closed
-        return ("winerror 10038" in t) or ("not a socket" in t) or ("10038" in t)
-
     def _run_fresh() -> dict[str, Any]:
         with Agent.create(opts) as agent:
             new_id = getattr(agent, "id", None) or getattr(
                 getattr(agent, "summary", None), "id", None
             )
-            if new_id:
+            if new_id and _use_resume():
                 with _SESSION_LOCK:
                     _SESSIONS[sid] = str(new_id)
             run = agent.send(prompt)
@@ -138,31 +145,39 @@ def _run_agent_sync(
                 "repo_root": cwd,
             }
 
-    try:
-        with _SESSION_LOCK:
-            agent_id = _SESSIONS.get(sid)
-
-        if agent_id:
-            # Resume must keep the same local cwd/model, otherwise the SDK may treat it as
-            # a different context and the streaming socket can error on Windows.
-            with Agent.resume(agent_id, opts) as agent:
-                run = agent.send(prompt)
-                result = run.wait()
-                if getattr(result, "status", None) == "error":
-                    return {
-                        "ok": False,
-                        "reply": f"Agent 运行失败: {result}",
-                        "backend": "cursor",
-                        "agent_id": agent_id,
-                    }
-                text = _extract_reply(result, run)
+    def _run_resume(agent_id: str) -> dict[str, Any]:
+        with Agent.resume(agent_id, opts) as agent:
+            run = agent.send(prompt)
+            result = run.wait()
+            if getattr(result, "status", None) == "error":
                 return {
-                    "ok": True,
-                    "reply": text or "（Agent 已完成，请查看 workflows 目录变更）",
+                    "ok": False,
+                    "reply": f"Agent 运行失败: {result}",
                     "backend": "cursor",
                     "agent_id": agent_id,
-                    "repo_root": cwd,
                 }
+            text = _extract_reply(result, run)
+            return {
+                "ok": True,
+                "reply": text or "（Agent 已完成，请查看 workflows 目录变更）",
+                "backend": "cursor",
+                "agent_id": agent_id,
+                "repo_root": cwd,
+            }
+
+    try:
+        agent_id: str | None = None
+        if _use_resume():
+            with _SESSION_LOCK:
+                agent_id = _SESSIONS.get(sid)
+
+        if agent_id:
+            try:
+                return _run_resume(agent_id)
+            except Exception as e:
+                if not _is_socket_error(str(e)):
+                    raise
+                _forget_session()
 
         return _run_fresh()
     except Exception as e:
@@ -176,7 +191,6 @@ def _run_agent_sync(
                 "reply": "Cursor API Key 无效或未授权。请在 Cursor 设置 → Integrations 中创建 Key 后重新保存。",
                 "backend": "cursor",
             }
-        # WinError 10038 is commonly a broken/closed streaming socket. Drop session and retry once.
         if _is_socket_error(err):
             _forget_session()
             try:
@@ -189,13 +203,18 @@ def _run_agent_sync(
             except Exception as e2:
                 err2 = str(e2)
                 tb2 = traceback.format_exc(limit=12)
+                hint = (
+                    "若仍失败：1) 完全退出并重启 ComfyUI  2) 升级 cursor-sdk："
+                    f'"{sys.executable}" -m pip install -U cursor-sdk\n'
+                    "3) 可选环境变量：HTTPX_HTTP2=0（部分网络下更稳）"
+                )
                 return {
                     "ok": False,
                     "reply": (
                         "Cursor Agent 连接异常（WinError 10038）。\n"
                         "已尝试清空会话并重试，仍失败。\n\n"
                         f"错误: {err2}\n"
-                        "建议：关闭并重启 ComfyUI / Cursor，确认网络未被防火墙拦截。\n"
+                        f"{hint}\n"
                     ),
                     "backend": "cursor",
                     "debug": {"error": err2, "trace": tb2},
@@ -230,5 +249,6 @@ def agent_status() -> dict[str, Any]:
     return {
         "sdk_installed": sdk_available(),
         "repo_root": str(registry.repo_root()),
+        "agent_use_resume": _use_resume(),
         **public_settings(),
     }

@@ -17,8 +17,8 @@ function loadStylesheet() {
   document.head.appendChild(link);
 }
 const LS_AGENT = "jinframe_use_agent";
-const LS_KEY = "jinframe_cursor_api_key";
 const LS_SESSION = "jinframe_agent_session";
+const LS_MODEL_COLLAPSE = "jinframe_models_collapsed";
 
 function el(tag, cls, html) {
   const n = document.createElement(tag);
@@ -41,7 +41,7 @@ async function mountAssistantUi() {
 
   const fab = el("button", "jinframe-fab", "💬");
     fab.id = BTN_ID;
-    fab.title = "JinFrame 助手";
+    fab.title = "金帧AI助手";
     document.body.appendChild(fab);
 
     const panel = el("div", "jinframe-panel");
@@ -49,7 +49,7 @@ async function mountAssistantUi() {
     panel.style.display = "none";
 
     const header = el("div", "jinframe-header");
-    header.appendChild(el("span", "jinframe-title", "<b>JinFrame 助手</b>"));
+    header.appendChild(el("span", "jinframe-title", "<b>金帧AI助手</b>"));
     const closeBtn = el("button", "jinframe-close", "×");
     closeBtn.type = "button";
     header.appendChild(closeBtn);
@@ -64,8 +64,12 @@ async function mountAssistantUi() {
       </label>
       <div class="jinframe-key-row" id="jinframe-key-row">
         <input type="password" id="jinframe-cursor-key" class="jinframe-key-input"
-          placeholder="Cursor API Key（cursor.com → Settings → Integrations）" autocomplete="off" />
-        <button type="button" class="jinframe-btn-secondary" id="jinframe-save-key">保存 Key</button>
+          placeholder="Cursor API Key（cursor.com → Integrations）" autocomplete="off" />
+        <button type="button" class="jinframe-btn-secondary" id="jinframe-save-key">保存</button>
+      </div>
+      <div class="jinframe-key-compact" id="jinframe-key-compact" style="display:none">
+        <button type="button" class="jinframe-key-icon-btn" id="jinframe-key-icon" title="API Key 已保存在本机 ComfyUI 配置">🔑</button>
+        <button type="button" class="jinframe-btn-link" id="jinframe-update-key">更新 Key</button>
       </div>
       <div class="jinframe-agent-hint" id="jinframe-agent-status"></div>
     `;
@@ -77,21 +81,23 @@ async function mountAssistantUi() {
 
     const modelSection = el("div", "jinframe-models", "");
     modelSection.id = "jinframe-model-section";
-    modelSection.appendChild(
-      el(
-        "div",
-        "jinframe-section-title",
-        "模型安装（可勾选单个文件，或点每行「下载」）"
-      )
-    );
+    const modelHead = el("div", "jinframe-model-head", "");
+    modelHead.innerHTML = `
+      <span class="jinframe-section-title jinframe-model-head-text">模型安装（可勾选单个文件，或点每行「下载」）</span>
+      <button type="button" class="jinframe-model-collapse-btn" id="jinframe-model-collapse" title="收起/展开">▼</button>
+    `;
+    const modelBody = el("div", "jinframe-model-body", "");
+    modelBody.id = "jinframe-model-body";
     const modelList = el("div", "jinframe-pack-list", "");
     modelList.id = "jinframe-pack-list";
-    modelSection.appendChild(modelList);
+    modelBody.appendChild(modelList);
     const dlBar = el("div", "jinframe-dl-bar", "");
     dlBar.innerHTML =
       '<button type="button" class="jinframe-btn-primary" id="jinframe-dl-btn">一键下载所选</button>' +
       '<span id="jinframe-dl-status"></span>';
-    modelSection.appendChild(dlBar);
+    modelBody.appendChild(dlBar);
+    modelSection.appendChild(modelHead);
+    modelSection.appendChild(modelBody);
     panel.appendChild(modelSection);
 
     const chatSection = el("div", "jinframe-chat-wrap", "");
@@ -114,11 +120,21 @@ async function mountAssistantUi() {
     const agentCb = document.getElementById("jinframe-agent-enable");
     const keyInput = document.getElementById("jinframe-cursor-key");
     const keyRow = document.getElementById("jinframe-key-row");
+    const keyCompact = document.getElementById("jinframe-key-compact");
+    const updateKeyBtn = document.getElementById("jinframe-update-key");
     const agentStatusEl = document.getElementById("jinframe-agent-status");
     const saveKeyBtn = document.getElementById("jinframe-save-key");
 
     agentCb.checked = localStorage.getItem(LS_AGENT) === "1";
-    keyInput.value = localStorage.getItem(LS_KEY) || "";
+    keyInput.value = "";
+    try {
+      localStorage.removeItem("jinframe_cursor_api_key");
+    } catch (_e) {
+      /* ignore */
+    }
+
+    let lastAgent = {};
+    let keyEditorMode = false;
 
     let chatHistory = [];
     let pollTimer = null;
@@ -182,8 +198,24 @@ async function mountAssistantUi() {
 
     const useAgent = () => agentCb.checked;
 
+    const syncKeyUi = () => {
+      if (!useAgent()) {
+        keyRow.style.display = "none";
+        keyCompact.style.display = "none";
+        return;
+      }
+      const has = !!lastAgent.has_key;
+      if (keyEditorMode || !has) {
+        keyRow.style.display = "flex";
+        keyCompact.style.display = "none";
+      } else {
+        keyRow.style.display = "none";
+        keyCompact.style.display = "flex";
+      }
+    };
+
     const updateAgentUi = () => {
-      keyRow.style.display = useAgent() ? "flex" : "none";
+      syncKeyUi();
       qwenBar.style.display = useAgent() ? "none" : "block";
       chatInput.placeholder = useAgent()
         ? "描述要如何改 workflows/ 里的 json…"
@@ -200,12 +232,13 @@ async function mountAssistantUi() {
       if (!agent.sdk_installed) {
         parts.push("⚠️ 需安装 cursor-sdk（见安装脚本 pip install）");
       }
-      if (agent.has_key) {
-        parts.push(`🔑 已保存 Key: <code>${agent.key_masked}</code>`);
-      } else {
-        parts.push("🔑 未保存 API Key");
+      if (!agent.has_key) {
+        parts.push("🔑 未保存 API Key（请粘贴后点保存）");
       }
       parts.push(`📁 仓库: <code>${agent.repo_root || ""}</code>`);
+      if (agent.agent_use_resume) {
+        parts.push("<small>Agent 会话续接已开启（JINFRAME_CURSOR_AGENT_USE_RESUME）</small>");
+      }
       agentStatusEl.innerHTML = parts.join("<br>");
     };
 
@@ -476,8 +509,10 @@ async function mountAssistantUi() {
     const refresh = async () => {
       try {
         const st = await fetchStatus();
-        renderAgent(st.agent || {});
+        lastAgent = st.agent || {};
+        renderAgent(lastAgent);
         renderQwen(st.qwen);
+        syncKeyUi();
         const dl = st.download || {};
         const wasActive = lastDownloadState.active;
         if (dl.active) {
@@ -491,8 +526,10 @@ async function mountAssistantUi() {
         }
         updateDownloadStatus(dl);
         lastDownloadState = dl;
-        if (st.agent?.has_key && !keyInput.value) {
-          keyInput.placeholder = `已保存 ${st.agent.key_masked}，可输入新 Key 覆盖`;
+        if (st.agent?.has_key) {
+          keyInput.placeholder = "输入新 Key 覆盖已保存的配置";
+        } else {
+          keyInput.placeholder = "Cursor API Key（cursor.com → Integrations）";
         }
       } catch (e) {
         setDownloadBusy(false);
@@ -514,9 +551,31 @@ async function mountAssistantUi() {
           agent_enabled: useAgent(),
         }),
       });
-      localStorage.setItem(LS_KEY, key);
+      keyEditorMode = false;
+      keyInput.value = "";
       await refresh();
       appendMsg("assistant", "✅ API Key 已保存到本机 ComfyUI 配置。");
+    });
+
+    updateKeyBtn.addEventListener("click", () => {
+      keyEditorMode = true;
+      keyInput.value = "";
+      syncKeyUi();
+      keyInput.focus();
+    });
+    document.getElementById("jinframe-key-icon").addEventListener("click", () => {
+      updateKeyBtn.click();
+    });
+
+    const collapseBtn = document.getElementById("jinframe-model-collapse");
+    if (localStorage.getItem(LS_MODEL_COLLAPSE) === "1") {
+      modelSection.classList.add("jinframe-models-collapsed");
+      collapseBtn.textContent = "▶";
+    }
+    collapseBtn.addEventListener("click", () => {
+      const collapsed = modelSection.classList.toggle("jinframe-models-collapsed");
+      collapseBtn.textContent = collapsed ? "▶" : "▼";
+      localStorage.setItem(LS_MODEL_COLLAPSE, collapsed ? "1" : "0");
     });
 
     const toggle = () => {
@@ -550,8 +609,11 @@ async function mountAssistantUi() {
       if (!text) return;
       if (useAgent() && !keyInput.value.trim()) {
         const st = await fetchStatus();
+        lastAgent = st.agent || lastAgent;
         if (!st.agent?.has_key) {
           alert("启用 Agent 前请先填写并保存 Cursor API Key");
+          keyEditorMode = true;
+          syncKeyUi();
           keyInput.focus();
           return;
         }
@@ -612,7 +674,7 @@ async function mountAssistantUi() {
     await refresh();
     scheduleRefresh(POLL_IDLE_MS);
     uiMounted = true;
-    console.log("[JinFrame] Assistant UI ready (click the blue chat button on the right)");
+    console.log("[金帧AI助手] UI ready (click the blue chat button on the right)");
 }
 
 app.registerExtension({

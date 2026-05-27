@@ -142,6 +142,87 @@ button.jinframe-fab {
   border-bottom: 1px solid #334155;
 }
 
+.jinframe-models.jinframe-models-collapsed {
+  max-height: none;
+  overflow: visible;
+  padding-bottom: 6px;
+}
+
+.jinframe-models.jinframe-models-collapsed .jinframe-model-body {
+  display: none !important;
+}
+
+.jinframe-model-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.jinframe-model-head-text {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.jinframe-model-collapse-btn {
+  flex-shrink: 0;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background: #252932;
+  color: #e2e8f0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.jinframe-model-collapse-btn:hover {
+  background: #334155;
+}
+
+.jinframe-model-body {
+  min-height: 0;
+}
+
+.jinframe-key-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.jinframe-key-icon-btn {
+  font-size: 20px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.jinframe-key-icon-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.jinframe-btn-link {
+  background: transparent;
+  border: none;
+  color: #93c5fd;
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.jinframe-btn-link:hover {
+  color: #bfdbfe;
+}
+
 .jinframe-section-title {
   font-weight: 600;
   margin-bottom: 8px;
