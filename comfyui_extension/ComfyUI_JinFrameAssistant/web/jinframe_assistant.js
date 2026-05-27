@@ -5,7 +5,7 @@ const PANEL_ID = "jinframe-assistant-panel";
 const BTN_ID = "jinframe-assistant-fab";
 const CSS_HREF = "extensions/ComfyUI_JinFrameAssistant/jinframe_assistant.css";
 /** Bump when UI changes; also forces browser to reload CSS after sync. */
-const UI_BUILD = "20260527-chatux";
+const UI_BUILD = "20260527-bridgefix";
 let uiMounted = false;
 
 function loadStylesheet() {

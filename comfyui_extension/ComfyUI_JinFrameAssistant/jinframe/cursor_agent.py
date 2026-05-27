@@ -7,6 +7,7 @@ import threading
 from typing import Any
 
 from . import registry
+from .cursor_bridge_patch import apply_cursor_sdk_windows_patch, patch_status
 from .debug_log import log_event, log_exception, log_file_path
 from .settings import get_api_key, public_settings
 
@@ -101,7 +102,10 @@ def _run_agent_sync(
             "backend": "cursor_sdk_missing",
         }
 
-    from cursor_sdk import Agent, AgentOptions, LocalAgentOptions
+    apply_cursor_sdk_windows_patch()
+
+    from cursor_sdk import AgentOptions, LocalAgentOptions
+    from cursor_sdk._client import Client, close_default_client
 
     cwd = str(registry.repo_root())
     if not (registry.repo_root() / "workflows").is_dir():
@@ -127,74 +131,62 @@ def _run_agent_sync(
         prompt_len=len(prompt),
         message_preview=user_message.strip()[:200],
         log_file=str(log_file_path()) if log_file_path() else None,
+        bridge_patch=patch_status(),
     )
 
     def _forget_session() -> None:
         with _SESSION_LOCK:
             _SESSIONS.pop(sid, None)
 
-    def _run_fresh() -> dict[str, Any]:
-        log_event("cursor_agent_run", mode="create", session_id=sid)
-        with Agent.create(opts) as agent:
-            new_id = getattr(agent, "id", None) or getattr(
-                getattr(agent, "summary", None), "id", None
-            )
-            if new_id and _use_resume():
-                with _SESSION_LOCK:
-                    _SESSIONS[sid] = str(new_id)
-            run = agent.send(prompt)
-            result = run.wait()
-            if getattr(result, "status", None) == "error":
-                return {
-                    "ok": False,
-                    "reply": f"Agent 运行失败: {result}",
+    def _run_with_client(mode: str, agent_id: str | None = None) -> dict[str, Any]:
+        """Launch bridge in jinFrame repo (not ComfyUI cwd); avoid broken default client."""
+        close_default_client()
+        log_event("cursor_agent_run", mode=mode, session_id=sid, agent_id=agent_id, cwd=cwd)
+        client = Client.launch_bridge(workspace=cwd, timeout=45)
+        try:
+            if mode == "resume" and agent_id:
+                agent = client.resume_agent(agent_id, opts)
+            else:
+                agent = client.create_agent(opts)
+            with agent:
+                new_id = agent.agent_id or agent_id
+                if new_id and _use_resume() and mode == "create":
+                    with _SESSION_LOCK:
+                        _SESSIONS[sid] = str(new_id)
+                run = agent.send(prompt)
+                result = run.wait()
+                if getattr(result, "status", None) == "error":
+                    return {
+                        "ok": False,
+                        "reply": f"Agent 运行失败: {result}",
+                        "backend": "cursor",
+                        "agent_id": new_id,
+                    }
+                text = _extract_reply(result, run)
+                out = {
+                    "ok": True,
+                    "reply": text or "（Agent 已完成，请查看 workflows 目录变更）",
                     "backend": "cursor",
+                    "agent_id": new_id,
+                    "repo_root": cwd,
                 }
-            text = _extract_reply(result, run)
-            out = {
-                "ok": True,
-                "reply": text or "（Agent 已完成，请查看 workflows 目录变更）",
-                "backend": "cursor",
-                "agent_id": new_id,
-                "repo_root": cwd,
-            }
-            log_event(
-                "cursor_agent_ok",
-                mode="create",
-                session_id=sid,
-                agent_id=new_id,
-                reply_len=len(text or ""),
-            )
-            return out
+                log_event(
+                    "cursor_agent_ok",
+                    mode=mode,
+                    session_id=sid,
+                    agent_id=new_id,
+                    reply_len=len(text or ""),
+                )
+                return out
+        finally:
+            client.close()
+            close_default_client()
+
+    def _run_fresh() -> dict[str, Any]:
+        return _run_with_client("create")
 
     def _run_resume(agent_id: str) -> dict[str, Any]:
-        log_event("cursor_agent_run", mode="resume", session_id=sid, agent_id=agent_id)
-        with Agent.resume(agent_id, opts) as agent:
-            run = agent.send(prompt)
-            result = run.wait()
-            if getattr(result, "status", None) == "error":
-                return {
-                    "ok": False,
-                    "reply": f"Agent 运行失败: {result}",
-                    "backend": "cursor",
-                    "agent_id": agent_id,
-                }
-            text = _extract_reply(result, run)
-            out = {
-                "ok": True,
-                "reply": text or "（Agent 已完成，请查看 workflows 目录变更）",
-                "backend": "cursor",
-                "agent_id": agent_id,
-                "repo_root": cwd,
-            }
-            log_event(
-                "cursor_agent_ok",
-                mode="resume",
-                session_id=sid,
-                agent_id=agent_id,
-                reply_len=len(text or ""),
-            )
-            return out
+        return _run_with_client("resume", agent_id)
 
     try:
         agent_id: str | None = None
@@ -259,7 +251,8 @@ def _run_agent_sync(
                 hint = (
                     "若仍失败：1) 完全退出并重启 ComfyUI  2) 升级 cursor-sdk："
                     f'"{sys.executable}" -m pip install -U cursor-sdk\n'
-                    "3) 可选环境变量：HTTPX_HTTP2=0（部分网络下更稳）"
+                    "3) 确认已安装 Cursor 桌面版且 cursor-sdk-bridge 在 PATH\n"
+                    "4) WinError 10038 需本插件 Windows 补丁（重新 install_jinframe_assistant）"
                 )
                 log_hint = ""
                 lp = log_file_path()
@@ -314,5 +307,6 @@ def agent_status() -> dict[str, Any]:
         "agent_use_resume": _use_resume(),
         "debug_log_enabled": lp is not None,
         "debug_log_path": str(lp) if lp else None,
+        "bridge_patch": patch_status(),
         **public_settings(),
     }
