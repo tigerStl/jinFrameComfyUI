@@ -110,6 +110,13 @@ button.jinframe-fab {
   font-size: 15px;
 }
 
+.jinframe-version {
+  margin-left: 8px;
+  font-size: 10px;
+  color: #6b7a8f;
+  font-weight: normal;
+}
+
 .jinframe-close {
   background: transparent;
   border: none;
@@ -454,6 +461,27 @@ button.jinframe-fab {
 
 .jinframe-msg.assistant {
   color: #e2e8f0;
+}
+
+.jinframe-msg-pending {
+  color: #94a3b8;
+  font-style: italic;
+  animation: jinframe-pending-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes jinframe-pending-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.jinframe-chat-input:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .jinframe-chat-input {

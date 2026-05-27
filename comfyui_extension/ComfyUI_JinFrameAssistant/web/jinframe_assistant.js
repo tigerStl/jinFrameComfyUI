@@ -4,16 +4,23 @@ import { api } from "../../scripts/api.js";
 const PANEL_ID = "jinframe-assistant-panel";
 const BTN_ID = "jinframe-assistant-fab";
 const CSS_HREF = "extensions/ComfyUI_JinFrameAssistant/jinframe_assistant.css";
+/** Bump when UI changes; also forces browser to reload CSS after sync. */
+const UI_BUILD = "20260527-chatux";
 let uiMounted = false;
 
 function loadStylesheet() {
   const id = "jinframe-assistant-css-link";
-  if (document.getElementById(id)) return;
-  const link = document.createElement("link");
+  let link = document.getElementById(id);
+  const href = `${CSS_HREF}?v=${UI_BUILD}`;
+  if (link) {
+    if (link.getAttribute("href") !== href) link.href = href;
+    return;
+  }
+  link = document.createElement("link");
   link.id = id;
   link.rel = "stylesheet";
   link.type = "text/css";
-  link.href = CSS_HREF;
+  link.href = href;
   document.head.appendChild(link);
 }
 const LS_AGENT = "jinframe_use_agent";
@@ -50,6 +57,7 @@ async function mountAssistantUi() {
 
     const header = el("div", "jinframe-header");
     header.appendChild(el("span", "jinframe-title", "<b>金帧AI助手</b>"));
+    header.appendChild(el("span", "jinframe-version", UI_BUILD));
     const closeBtn = el("button", "jinframe-close", "×");
     closeBtn.type = "button";
     header.appendChild(closeBtn);
@@ -137,6 +145,7 @@ async function mountAssistantUi() {
     let keyEditorMode = false;
 
     let chatHistory = [];
+    let chatBusy = false;
     let pollTimer = null;
     let agentSessionId = localStorage.getItem(LS_SESSION) || crypto.randomUUID();
     const fileSelection = new Set();
@@ -602,32 +611,69 @@ async function mountAssistantUi() {
       const m = el("div", "jinframe-msg " + role, text.replace(/\n/g, "<br>"));
       chatLog.appendChild(m);
       chatLog.scrollTop = chatLog.scrollHeight;
+      return m;
     };
+
+    const removePendingReply = () => {
+      document.getElementById("jinframe-pending-reply")?.remove();
+    };
+
+    const showPendingReply = (label) => {
+      removePendingReply();
+      const m = el(
+        "div",
+        "jinframe-msg assistant jinframe-msg-pending",
+        `<em>${label}</em>`
+      );
+      m.id = "jinframe-pending-reply";
+      chatLog.appendChild(m);
+      chatLog.scrollTop = chatLog.scrollHeight;
+      return m;
+    };
+
+    const setChatBusy = (busy) => {
+      chatBusy = busy;
+      sendBtn.disabled = busy;
+      chatInput.disabled = busy;
+      sendBtn.textContent = busy ? "处理中…" : "发送";
+    };
+
+    /** Let the browser paint user message + pending state before await. */
+    const yieldToPaint = () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      });
 
     const sendChat = async () => {
       const text = chatInput.value.trim();
-      if (!text) return;
-      if (useAgent() && !keyInput.value.trim()) {
-        const st = await fetchStatus();
-        lastAgent = st.agent || lastAgent;
-        if (!st.agent?.has_key) {
-          alert("启用 Agent 前请先填写并保存 Cursor API Key");
-          keyEditorMode = true;
-          syncKeyUi();
-          keyInput.focus();
-          return;
-        }
-      }
+      if (!text || chatBusy) return;
+
+      setChatBusy(true);
       chatInput.value = "";
       appendMsg("user", text);
-      sendBtn.disabled = true;
-      if (useAgent()) {
-        appendMsg(
-          "assistant",
-          "<em>Cursor Agent 运行中，可能需要 1–5 分钟，请稍候…</em>"
-        );
-      }
+      const pendingLabel = useAgent()
+        ? "正在调用 Cursor Agent…（可能需要 1–5 分钟）"
+        : "正在调用本地助手…";
+      showPendingReply(pendingLabel);
+      await yieldToPaint();
+
       try {
+        if (useAgent() && !keyInput.value.trim()) {
+          const st = await fetchStatus();
+          lastAgent = st.agent || lastAgent;
+          if (!st.agent?.has_key) {
+            removePendingReply();
+            appendMsg(
+              "assistant",
+              "启用 Agent 前请先填写并保存 Cursor API Key。"
+            );
+            keyEditorMode = true;
+            syncKeyUi();
+            keyInput.focus();
+            return;
+          }
+        }
+
         const payload = {
           message: text,
           messages: chatHistory,
@@ -641,10 +687,7 @@ async function mountAssistantUi() {
           body: JSON.stringify(payload),
         });
         const data = await r.json();
-        if (chatLog.lastChild?.classList?.contains("assistant")) {
-          const last = chatLog.lastChild;
-          if (last.textContent.includes("运行中")) last.remove();
-        }
+        removePendingReply();
         if (data.ok) {
           chatHistory.push({ role: "user", content: text });
           chatHistory.push({ role: "assistant", content: data.reply });
@@ -657,9 +700,12 @@ async function mountAssistantUi() {
           appendMsg("assistant", data.reply || "请求失败");
         }
       } catch (e) {
+        removePendingReply();
         appendMsg("assistant", "请求失败: " + e);
+      } finally {
+        setChatBusy(false);
+        chatInput.focus();
       }
-      sendBtn.disabled = false;
     };
 
     sendBtn.addEventListener("click", sendChat);
@@ -674,7 +720,7 @@ async function mountAssistantUi() {
     await refresh();
     scheduleRefresh(POLL_IDLE_MS);
     uiMounted = true;
-    console.log("[金帧AI助手] UI ready (click the blue chat button on the right)");
+    console.log(`[金帧AI助手] UI ${UI_BUILD} ready (click the blue chat button on the right)`);
 }
 
 app.registerExtension({

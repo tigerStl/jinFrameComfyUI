@@ -7,6 +7,7 @@ import threading
 from typing import Any
 
 from . import registry
+from .debug_log import log_event, log_exception, log_file_path
 from .settings import get_api_key, public_settings
 
 _AGENT_SYSTEM = """你是 JinFrame ComfyUI 工作流编辑助手。工作目录是 jinFrameComfyUI 仓库。
@@ -116,11 +117,24 @@ def _run_agent_sync(
     prompt = _build_prompt(user_message, messages)
     sid = (session_id or "default").strip() or "default"
 
+    log_event(
+        "cursor_agent_start",
+        session_id=sid,
+        use_resume=_use_resume(),
+        model=model,
+        cwd=cwd,
+        python=sys.executable,
+        prompt_len=len(prompt),
+        message_preview=user_message.strip()[:200],
+        log_file=str(log_file_path()) if log_file_path() else None,
+    )
+
     def _forget_session() -> None:
         with _SESSION_LOCK:
             _SESSIONS.pop(sid, None)
 
     def _run_fresh() -> dict[str, Any]:
+        log_event("cursor_agent_run", mode="create", session_id=sid)
         with Agent.create(opts) as agent:
             new_id = getattr(agent, "id", None) or getattr(
                 getattr(agent, "summary", None), "id", None
@@ -137,15 +151,24 @@ def _run_agent_sync(
                     "backend": "cursor",
                 }
             text = _extract_reply(result, run)
-            return {
+            out = {
                 "ok": True,
                 "reply": text or "（Agent 已完成，请查看 workflows 目录变更）",
                 "backend": "cursor",
                 "agent_id": new_id,
                 "repo_root": cwd,
             }
+            log_event(
+                "cursor_agent_ok",
+                mode="create",
+                session_id=sid,
+                agent_id=new_id,
+                reply_len=len(text or ""),
+            )
+            return out
 
     def _run_resume(agent_id: str) -> dict[str, Any]:
+        log_event("cursor_agent_run", mode="resume", session_id=sid, agent_id=agent_id)
         with Agent.resume(agent_id, opts) as agent:
             run = agent.send(prompt)
             result = run.wait()
@@ -157,13 +180,21 @@ def _run_agent_sync(
                     "agent_id": agent_id,
                 }
             text = _extract_reply(result, run)
-            return {
+            out = {
                 "ok": True,
                 "reply": text or "（Agent 已完成，请查看 workflows 目录变更）",
                 "backend": "cursor",
                 "agent_id": agent_id,
                 "repo_root": cwd,
             }
+            log_event(
+                "cursor_agent_ok",
+                mode="resume",
+                session_id=sid,
+                agent_id=agent_id,
+                reply_len=len(text or ""),
+            )
+            return out
 
     try:
         agent_id: str | None = None
@@ -177,6 +208,13 @@ def _run_agent_sync(
             except Exception as e:
                 if not _is_socket_error(str(e)):
                     raise
+                log_exception(
+                    "cursor_agent_socket_error",
+                    e,
+                    phase="resume",
+                    session_id=sid,
+                    agent_id=agent_id,
+                )
                 _forget_session()
 
         return _run_fresh()
@@ -185,6 +223,13 @@ def _run_agent_sync(
 
         err = str(e)
         tb = traceback.format_exc(limit=12)
+        log_exception(
+            "cursor_agent_error",
+            e,
+            session_id=sid,
+            use_resume=_use_resume(),
+            is_socket=_is_socket_error(err),
+        )
         if "401" in err or "auth" in err.lower() or "api key" in err.lower():
             return {
                 "ok": False,
@@ -193,9 +238,11 @@ def _run_agent_sync(
             }
         if _is_socket_error(err):
             _forget_session()
+            log_event("cursor_agent_retry", session_id=sid, reason="socket_error_10038")
             try:
                 retry = _run_fresh()
                 if retry.get("ok"):
+                    log_event("cursor_agent_retry_ok", session_id=sid)
                     retry["reply"] = (
                         "（检测到连接中断，已自动重试成功）\n\n" + str(retry.get("reply") or "")
                     ).strip()
@@ -203,27 +250,41 @@ def _run_agent_sync(
             except Exception as e2:
                 err2 = str(e2)
                 tb2 = traceback.format_exc(limit=12)
+                log_exception(
+                    "cursor_agent_retry_failed",
+                    e2,
+                    session_id=sid,
+                    first_error=err,
+                )
                 hint = (
                     "若仍失败：1) 完全退出并重启 ComfyUI  2) 升级 cursor-sdk："
                     f'"{sys.executable}" -m pip install -U cursor-sdk\n'
                     "3) 可选环境变量：HTTPX_HTTP2=0（部分网络下更稳）"
                 )
+                log_hint = ""
+                lp = log_file_path()
+                if lp:
+                    log_hint = f"\n详细日志已写入: {lp}"
                 return {
                     "ok": False,
                     "reply": (
                         "Cursor Agent 连接异常（WinError 10038）。\n"
                         "已尝试清空会话并重试，仍失败。\n\n"
                         f"错误: {err2}\n"
-                        f"{hint}\n"
+                        f"{hint}{log_hint}\n"
                     ),
                     "backend": "cursor",
-                    "debug": {"error": err2, "trace": tb2},
+                    "debug": {"error": err2, "trace": tb2, "log_file": str(lp) if lp else None},
                 }
+        log_hint = ""
+        lp = log_file_path()
+        if lp:
+            log_hint = f"\n详细日志: {lp}"
         return {
             "ok": False,
-            "reply": f"Cursor Agent 错误: {err}",
+            "reply": f"Cursor Agent 错误: {err}{log_hint}",
             "backend": "cursor",
-            "debug": {"error": err, "trace": tb},
+            "debug": {"error": err, "trace": tb, "log_file": str(lp) if lp else None},
         }
 
 
@@ -246,9 +307,12 @@ def chat(
 
 
 def agent_status() -> dict[str, Any]:
+    lp = log_file_path()
     return {
         "sdk_installed": sdk_available(),
         "repo_root": str(registry.repo_root()),
         "agent_use_resume": _use_resume(),
+        "debug_log_enabled": lp is not None,
+        "debug_log_path": str(lp) if lp else None,
         **public_settings(),
     }
