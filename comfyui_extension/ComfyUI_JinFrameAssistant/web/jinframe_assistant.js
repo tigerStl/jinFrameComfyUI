@@ -227,7 +227,7 @@ async function mountAssistantUi() {
       syncKeyUi();
       qwenBar.style.display = useAgent() ? "none" : "block";
       chatInput.placeholder = useAgent()
-        ? "描述要如何改 workflows/ 里的 json…"
+        ? "描述要如何改 ComfyUI workflows 里的 json…"
         : "问我：缺什么模型？怎么出图？…";
     };
 

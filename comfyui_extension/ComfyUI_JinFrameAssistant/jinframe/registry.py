@@ -30,6 +30,11 @@ def comfy_models_root() -> Path:
     return Path(root).resolve() / "models"
 
 
+def comfy_workflows_root() -> Path:
+    root = os.environ.get("COMFYUI_ROOT", r"C:\ComfyUI\ComfyUI")
+    return Path(root).resolve() / "user" / "default" / "workflows"
+
+
 def repo_root() -> Path:
     if os.environ.get("JINFRAME_REPO_ROOT"):
         return Path(os.environ["JINFRAME_REPO_ROOT"]).resolve()

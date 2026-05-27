@@ -11,10 +11,10 @@ from .cursor_bridge_patch import apply_cursor_sdk_windows_patch, patch_status
 from .debug_log import log_event, log_exception, log_file_path
 from .settings import get_api_key, public_settings
 
-_AGENT_SYSTEM = """你是 JinFrame ComfyUI 工作流编辑助手。工作目录是 jinFrameComfyUI 仓库。
+_AGENT_SYSTEM = """你是 JinFrame ComfyUI 工作流编辑助手。工作目录是 ComfyUI 的 workflows 目录。
 
 硬性规则：
-1. 只允许修改 workflows/ 目录下的 .json 与 .md 说明文件
+1. 只允许修改 ComfyUI\\user\\default\\workflows 目录下的 .json 与 .md 说明文件（含子目录）
 2. 不要修改 install/、模型权重、色情或露骨 prompt
 3. 修改后简要说明改了哪些文件；提醒用户在 ComfyUI 里重新 Load 工作流
 4. 保持 JSON 合法（UTF-8，缩进 2 空格）
@@ -107,11 +107,17 @@ def _run_agent_sync(
     from cursor_sdk import AgentOptions, LocalAgentOptions
     from cursor_sdk._client import Client, close_default_client
 
-    cwd = str(registry.repo_root())
-    if not (registry.repo_root() / "workflows").is_dir():
+    wf_root = registry.comfy_workflows_root()
+    cwd = str(wf_root)
+    if not wf_root.is_dir():
         return {
             "ok": False,
-            "reply": f"仓库路径不存在或缺少 workflows/: {cwd}",
+            "reply": (
+                "未找到 ComfyUI workflows 目录。\n"
+                f"当前 COMFYUI_ROOT={os.environ.get('COMFYUI_ROOT', '') or '(未设置)'}\n"
+                f"期望路径：{wf_root}\n"
+                "请先设置 COMFYUI_ROOT（例如 K:\\ComfyUI\\ComfyUI），再重启 ComfyUI。"
+            ),
             "backend": "cursor",
         }
 
