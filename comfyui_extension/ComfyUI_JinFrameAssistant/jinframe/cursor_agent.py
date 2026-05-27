@@ -99,38 +99,21 @@ def _run_agent_sync(
         }
 
     model = os.environ.get("JINFRAME_CURSOR_MODEL", "composer-2.5")
-    opts = AgentOptions(
-        api_key=api_key,
-        model=model,
-        local=LocalAgentOptions(cwd=cwd),
-    )
+    local = LocalAgentOptions(cwd=cwd)
+    opts = AgentOptions(api_key=api_key, model=model, local=local)
     prompt = _build_prompt(user_message, messages)
     sid = (session_id or "default").strip() or "default"
 
-    try:
+    def _forget_session() -> None:
         with _SESSION_LOCK:
-            agent_id = _SESSIONS.get(sid)
+            _SESSIONS.pop(sid, None)
 
-        if agent_id:
-            with Agent.resume(agent_id, AgentOptions(api_key=api_key)) as agent:
-                run = agent.send(user_message.strip())
-                result = run.wait()
-                if getattr(result, "status", None) == "error":
-                    return {
-                        "ok": False,
-                        "reply": f"Agent 运行失败: {result}",
-                        "backend": "cursor",
-                        "agent_id": agent_id,
-                    }
-                text = _extract_reply(result, run)
-                return {
-                    "ok": True,
-                    "reply": text or "（Agent 已完成，请查看 workflows 目录变更）",
-                    "backend": "cursor",
-                    "agent_id": agent_id,
-                    "repo_root": cwd,
-                }
+    def _is_socket_error(err_text: str) -> bool:
+        t = (err_text or "").lower()
+        # Windows socket/stream teardown seen when the underlying connection is closed
+        return ("winerror 10038" in t) or ("not a socket" in t) or ("10038" in t)
 
+    def _run_fresh() -> dict[str, Any]:
         with Agent.create(opts) as agent:
             new_id = getattr(agent, "id", None) or getattr(
                 getattr(agent, "summary", None), "id", None
@@ -154,15 +137,75 @@ def _run_agent_sync(
                 "agent_id": new_id,
                 "repo_root": cwd,
             }
+
+    try:
+        with _SESSION_LOCK:
+            agent_id = _SESSIONS.get(sid)
+
+        if agent_id:
+            # Resume must keep the same local cwd/model, otherwise the SDK may treat it as
+            # a different context and the streaming socket can error on Windows.
+            with Agent.resume(agent_id, opts) as agent:
+                run = agent.send(prompt)
+                result = run.wait()
+                if getattr(result, "status", None) == "error":
+                    return {
+                        "ok": False,
+                        "reply": f"Agent 运行失败: {result}",
+                        "backend": "cursor",
+                        "agent_id": agent_id,
+                    }
+                text = _extract_reply(result, run)
+                return {
+                    "ok": True,
+                    "reply": text or "（Agent 已完成，请查看 workflows 目录变更）",
+                    "backend": "cursor",
+                    "agent_id": agent_id,
+                    "repo_root": cwd,
+                }
+
+        return _run_fresh()
     except Exception as e:
+        import traceback
+
         err = str(e)
+        tb = traceback.format_exc(limit=12)
         if "401" in err or "auth" in err.lower() or "api key" in err.lower():
             return {
                 "ok": False,
                 "reply": "Cursor API Key 无效或未授权。请在 Cursor 设置 → Integrations 中创建 Key 后重新保存。",
                 "backend": "cursor",
             }
-        return {"ok": False, "reply": f"Cursor Agent 错误: {err}", "backend": "cursor"}
+        # WinError 10038 is commonly a broken/closed streaming socket. Drop session and retry once.
+        if _is_socket_error(err):
+            _forget_session()
+            try:
+                retry = _run_fresh()
+                if retry.get("ok"):
+                    retry["reply"] = (
+                        "（检测到连接中断，已自动重试成功）\n\n" + str(retry.get("reply") or "")
+                    ).strip()
+                return retry
+            except Exception as e2:
+                err2 = str(e2)
+                tb2 = traceback.format_exc(limit=12)
+                return {
+                    "ok": False,
+                    "reply": (
+                        "Cursor Agent 连接异常（WinError 10038）。\n"
+                        "已尝试清空会话并重试，仍失败。\n\n"
+                        f"错误: {err2}\n"
+                        "建议：关闭并重启 ComfyUI / Cursor，确认网络未被防火墙拦截。\n"
+                    ),
+                    "backend": "cursor",
+                    "debug": {"error": err2, "trace": tb2},
+                }
+        return {
+            "ok": False,
+            "reply": f"Cursor Agent 错误: {err}",
+            "backend": "cursor",
+            "debug": {"error": err, "trace": tb},
+        }
 
 
 def chat(
