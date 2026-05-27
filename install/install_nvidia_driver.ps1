@@ -93,8 +93,14 @@ if (-not $Force -and $smi.driver) {
     } catch { }
 }
 
-$destDir = Join-Path $env:TEMP "jinframe_nvidia_driver"
-if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
+# Use LocalAppData (not C:\Windows\Temp) to avoid NvApp/CEF "Access is denied"
+$workRoot = Join-Path $env:LOCALAPPDATA "jinframe\nvidia_driver"
+$destDir = Join-Path $workRoot "download"
+$extractDir = Join-Path $workRoot "extract_$($latest.Version)"
+$logDir = Join-Path $workRoot "logs"
+foreach ($d in @($destDir, $logDir)) {
+    if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+}
 $installer = Join-Path $destDir "GeForce_$($latest.Version)-win11-dch-whql.exe"
 
 Write-Log "Download (~900MB): $($latest.DownloadUrl)" "Cyan"
@@ -108,18 +114,53 @@ if ($NoInstall) {
     exit 0
 }
 
-Write-Log "Installing driver silently (no reboot yet: -s -n) ..." "Yellow"
+Write-Log "Installing display driver only (skip NVIDIA App / CEF) ..." "Yellow"
+Write-Log "Extract + setup under: $workRoot" "DarkGray"
 Write-Log "This may take 5-15 minutes. Do not close the window." "DarkGray"
 
-$args = @("-s", "-n")
-if ($AllowRebootNow) {
-    $args = @("-s")
-    Write-Log "AllowRebootNow: installer may reboot immediately" "Yellow"
+$scratchTemp = Join-Path $workRoot "temp"
+if (Test-Path $scratchTemp) { Remove-Item $scratchTemp -Recurse -Force -ErrorAction SilentlyContinue }
+New-Item -ItemType Directory -Path $scratchTemp -Force | Out-Null
+$prevTemp = $env:TEMP
+$prevTmp = $env:TMP
+$env:TEMP = $scratchTemp
+$env:TMP = $scratchTemp
+
+try {
+    if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
+    Write-Log "Extracting package ..." "Cyan"
+    $ex = Start-Process -FilePath $installer -ArgumentList @("-extract:$extractDir") -Wait -PassThru
+    if ($ex.ExitCode -ne 0) {
+        Write-Log "Extract exit $($ex.ExitCode); retry extract to $destDir ..." "DarkYellow"
+        $extractDir = Join-Path $destDir "extract"
+        if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
+        $ex = Start-Process -FilePath $installer -ArgumentList @("-extract:$extractDir") -Wait -PassThru
+    }
+
+    $setupExe = Get-ChildItem -Path $extractDir -Filter "setup.exe" -Recurse -ErrorAction SilentlyContinue |
+        Sort-Object { $_.FullName.Length } | Select-Object -First 1
+    if (-not $setupExe) {
+        Write-Log "setup.exe not found after extract; trying top-level -s -n Display.Driver ..." "Yellow"
+        $setupArgs = @("-s", "-n", "Display.Driver")
+        if ($AllowRebootNow) { $setupArgs = @("-s", "Display.Driver") }
+        $p = Start-Process -FilePath $installer -ArgumentList $setupArgs -Wait -PassThru
+        $code = $p.ExitCode
+    } else {
+        Write-Log "Using: $($setupExe.FullName)" "DarkGray"
+        $setupArgs = @("-s", "-n", "Display.Driver", "-log:$logDir", "-loglevel:6")
+        if ($AllowRebootNow) { $setupArgs = @("-s", "Display.Driver", "-log:$logDir", "-loglevel:6") }
+        $p = Start-Process -FilePath $setupExe.FullName -WorkingDirectory $setupExe.DirectoryName -ArgumentList $setupArgs -Wait -PassThru
+        $code = $p.ExitCode
+    }
+} finally {
+    $env:TEMP = $prevTemp
+    $env:TMP = $prevTmp
 }
 
-$p = Start-Process -FilePath $installer -ArgumentList $args -Wait -PassThru
-$code = $p.ExitCode
 Write-Log "Installer exit code: $code" "Cyan"
+if ($code -ne 0 -and (Test-Path $logDir)) {
+    Write-Log "See logs: $logDir" "DarkGray"
+}
 
 # NVIDIA: 0 = success, 1 = success reboot required
 if ($code -eq 0 -or $code -eq 1) {

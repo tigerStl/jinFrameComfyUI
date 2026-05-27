@@ -5,7 +5,8 @@ cd /d "%~dp0\.."
 echo.
 echo JinFrame: install latest GeForce driver (580+ for RTX 3050 / cu130)
 echo UAC will ask for Administrator - click Yes
-echo Install uses -n (no reboot until you choose to restart)
+echo Install: display driver only (skips NVIDIA App to avoid C:\Windows\Temp errors)
+echo Uses -n (no reboot until you choose to restart)
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install_nvidia_driver.ps1" -RepoRoot "%CD%" -MinVersion 580.0 -TryElevate -NoElevate
 set ERR=%ERRORLEVEL%

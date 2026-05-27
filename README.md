@@ -626,6 +626,8 @@ cd K:\tiger\jinFrame\jinFrameComfyUI
 
 手动升级： [NVIDIA 驱动下载](https://www.nvidia.com/Download/index.aspx) → 重启 → `.\install\repair_comfyui_cuda.ps1`
 
+若安装报错 `chrome_elf.dll` / `Access is denied`（NvApp/CEF）：请 `git pull` 后用新版脚本（仅装 **Display.Driver**，解压到 `%LOCALAPPDATA%\jinframe`），或安装时**取消勾选 NVIDIA App**。
+
 ---
 
 ## 环境变量
